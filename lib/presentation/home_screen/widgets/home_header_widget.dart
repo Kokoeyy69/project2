@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/custom_image_widget.dart';
 
@@ -13,6 +14,9 @@ class HomeHeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final String displayName = user?.displayName ?? user?.email ?? 'Guest';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Row(
@@ -34,7 +38,7 @@ class HomeHeaderWidget extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'Rania Kusuma',
+                      displayName,
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -80,7 +84,7 @@ class HomeHeaderWidget extends StatelessWidget {
             children: [
               _buildNotificationButton(),
               const SizedBox(width: 12),
-              _buildAvatar(),
+              _buildAvatar(user),
             ],
           ),
         ],
@@ -135,18 +139,30 @@ class HomeHeaderWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(User? user) {
+    final photoUrl = user?.photoURL;
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
-      child: CustomImageWidget(
-        imageUrl:
-            'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=80',
-        width: 40,
-        height: 40,
-        fit: BoxFit.cover,
-        semanticLabel:
-            'Profile photo of Rania Kusuma, young Indonesian woman with dark hair',
-      ),
+      child: photoUrl != null
+          ? CustomImageWidget(
+              imageUrl: photoUrl,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              semanticLabel: 'Profile photo of ${user?.displayName ?? ''}',
+            )
+          : Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryMuted,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: AppTheme.primary,
+              ),
+            ),
     );
   }
 }

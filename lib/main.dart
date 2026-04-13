@@ -1,13 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 import '../core/app_export.dart';
 import '../widgets/custom_error_widget.dart';
+import 'routes/app_routes.dart';
 // Note: Pastikan AppRoutes sudah ter-import di dalam app_export.dart
 // Kalau error merah di AppRoutes, tambahkan manual: import '../routes/app_routes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
 
   bool hasShownError = false;
 

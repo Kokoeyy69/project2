@@ -2,30 +2,43 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
+import './transfer_view_model.dart';
 import './widgets/ai_suggestion_strip_widget.dart';
 import './widgets/amount_input_widget.dart';
 import './widgets/confirm_transfer_button_widget.dart';
+import './widgets/numeric_keypad_widget.dart';
 import './widgets/recipient_selector_widget.dart';
 import './widgets/source_wallet_selector_widget.dart';
 import './widgets/transfer_fee_breakdown_widget.dart';
 
-class TransferScreen extends StatefulWidget {
+class TransferScreen extends StatelessWidget {
   const TransferScreen({super.key});
 
   @override
-  State<TransferScreen> createState() => _TransferScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => TransferViewModel(),
+      child: const _TransferScreenContent(),
+    );
+  }
 }
 
-class _TransferScreenState extends State<TransferScreen> {
-  // TODO: Replace with Riverpod/Bloc for production
+class _TransferScreenContent extends StatefulWidget {
+  const _TransferScreenContent();
+
+  @override
+  State<_TransferScreenContent> createState() => _TransferScreenContentState();
+}
+
+class _TransferScreenContentState extends State<_TransferScreenContent> {
   int _currentNavIndex = 1;
   int _selectedWalletIndex = 0;
   String _selectedRecipientId = '';
-  double _amount = 0.0;
 
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
@@ -46,13 +59,10 @@ class _TransferScreenState extends State<TransferScreen> {
     setState(() => _selectedRecipientId = id);
   }
 
-  void _onAmountChanged(double amount) {
-    setState(() => _amount = amount);
-  }
-
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
+    final transferViewModel = context.watch<TransferViewModel>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F14),
@@ -167,45 +177,58 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   Widget _buildPhoneLayout() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: Column(
-        children: [
-          RecipientSelectorWidget(
-            selectedId: _selectedRecipientId,
-            onSelected: _onRecipientSelected,
+    final transferViewModel = context.watch<TransferViewModel>();
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: Column(
+              children: [
+                RecipientSelectorWidget(
+                  selectedId: _selectedRecipientId,
+                  onSelected: _onRecipientSelected,
+                ),
+                const SizedBox(height: 16),
+                SourceWalletSelectorWidget(
+                  selectedIndex: _selectedWalletIndex,
+                  onSelected: _onWalletSelected,
+                ),
+                const SizedBox(height: 16),
+                AmountInputWidget(
+                  selectedWalletIndex: _selectedWalletIndex,
+                ),
+                const SizedBox(height: 16),
+                AiSuggestionStripWidget(
+                  selectedWalletIndex: _selectedWalletIndex,
+                ),
+                const SizedBox(height: 16),
+                TransferFeeBreakdownWidget(
+                  amount: transferViewModel.numericAmount,
+                  selectedWalletIndex: _selectedWalletIndex,
+                ),
+                const SizedBox(height: 20),
+                ConfirmTransferButtonWidget(
+                  amount: transferViewModel.numericAmount,
+                  recipientId: _selectedRecipientId,
+                  walletIndex: _selectedWalletIndex,
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          SourceWalletSelectorWidget(
-            selectedIndex: _selectedWalletIndex,
-            onSelected: _onWalletSelected,
-          ),
-          const SizedBox(height: 16),
-          AmountInputWidget(
-            selectedWalletIndex: _selectedWalletIndex,
-            onAmountChanged: _onAmountChanged,
-          ),
-          const SizedBox(height: 16),
-          AiSuggestionStripWidget(selectedWalletIndex: _selectedWalletIndex),
-          const SizedBox(height: 16),
-          TransferFeeBreakdownWidget(
-            amount: _amount,
-            selectedWalletIndex: _selectedWalletIndex,
-          ),
-          const SizedBox(height: 20),
-          ConfirmTransferButtonWidget(
-            amount: _amount,
-            recipientId: _selectedRecipientId,
-            walletIndex: _selectedWalletIndex,
-          ),
-          const SizedBox(height: 100),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: NumericKeypadWidget(onKeyTap: (String key) {  }, onBackspace: () {  }, displayAmount: '', onClear: () {  },),
+        ),
+      ],
     );
   }
 
   Widget _buildTabletLayout() {
+    final transferViewModel = context.watch<TransferViewModel>();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -238,7 +261,6 @@ class _TransferScreenState extends State<TransferScreen> {
               children: [
                 AmountInputWidget(
                   selectedWalletIndex: _selectedWalletIndex,
-                  onAmountChanged: _onAmountChanged,
                 ),
                 const SizedBox(height: 16),
                 AiSuggestionStripWidget(
@@ -246,12 +268,12 @@ class _TransferScreenState extends State<TransferScreen> {
                 ),
                 const SizedBox(height: 16),
                 TransferFeeBreakdownWidget(
-                  amount: _amount,
+                  amount: transferViewModel.numericAmount,
                   selectedWalletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 20),
                 ConfirmTransferButtonWidget(
-                  amount: _amount,
+                  amount: transferViewModel.numericAmount,
                   recipientId: _selectedRecipientId,
                   walletIndex: _selectedWalletIndex,
                 ),
