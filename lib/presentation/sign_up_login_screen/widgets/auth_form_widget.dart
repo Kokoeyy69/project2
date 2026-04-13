@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../theme/app_theme.dart';
 
 class AuthFormWidget extends StatefulWidget {
@@ -21,7 +22,6 @@ class AuthFormWidget extends StatefulWidget {
 
 class _AuthFormWidgetState extends State<AuthFormWidget>
     with SingleTickerProviderStateMixin {
-  // TODO: Replace with Riverpod/Bloc for production
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -36,9 +36,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
   bool _biometricEnabled = false;
   String? _errorMessage;
 
-  // Demo credentials
-  static const _demoEmail = 'rania.kusuma@neopay.ai';
-  static const _demoPassword = 'NeoPay@2026';
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   late AnimationController _formAnimController;
   late Animation<double> _formAnimation;
@@ -85,33 +83,37 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
       _errorMessage = null;
     });
 
-    // TODO: Replace with actual auth service call
-    await Future.delayed(const Duration(milliseconds: 1400));
-
-    if (!mounted) return;
-
-    if (widget.isLogin) {
-      if (_emailController.text.trim() == _demoEmail &&
-          _passwordController.text == _demoPassword) {
-        setState(() => _isLoading = false);
-        widget.onSuccess();
+    try {
+      if (widget.isLogin) {
+        await _auth.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
       } else {
+        await _auth.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+      }
+      if (!mounted) return;
+      widget.onSuccess();
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+      });
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage =
-              'Invalid credentials — use the demo accounts below to sign in';
         });
       }
-    } else {
-      setState(() => _isLoading = false);
-      widget.onSuccess();
     }
   }
 
   void _autofillDemo() {
     setState(() {
-      _emailController.text = _demoEmail;
-      _passwordController.text = _demoPassword;
+      _emailController.text = 'test@test.com';
+      _passwordController.text = 'password';
       _errorMessage = null;
     });
   }
@@ -595,7 +597,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
               ],
             ),
           ),
-          _buildCredentialRow(Icons.email_outlined, 'Email', _demoEmail),
+          _buildCredentialRow(Icons.email_outlined, 'Email', 'test@test.com'),
           Divider(
             color: AppTheme.separator,
             height: 0,
@@ -605,7 +607,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
           _buildCredentialRow(
             Icons.lock_outline_rounded,
             'Password',
-            _demoPassword,
+            'password',
             isPassword: true,
           ),
           Padding(

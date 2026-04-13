@@ -1,8 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
 import '../../../theme/app_theme.dart';
 
+// Model data ditaruh di sini agar file ini mandiri
 class WalletCard {
   final String currency;
   final String currencySymbol;
@@ -30,9 +33,14 @@ class WalletCard {
 }
 
 class WalletCardCarouselWidget extends StatefulWidget {
+  final List<dynamic>? balances;
   final ValueChanged<int> onCardChanged;
 
-  const WalletCardCarouselWidget({super.key, required this.onCardChanged});
+  const WalletCardCarouselWidget({
+    super.key,
+    this.balances,
+    required this.onCardChanged,
+  });
 
   @override
   State<WalletCardCarouselWidget> createState() =>
@@ -40,48 +48,72 @@ class WalletCardCarouselWidget extends StatefulWidget {
 }
 
 class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
-  // TODO: Replace with Riverpod/Bloc for production
   final PageController _pageController = PageController(viewportFraction: 0.88);
   int _currentIndex = 0;
+  List<WalletCard> _cards = [];
 
-  static const List<WalletCard> _cards = [
-    WalletCard(
-      currency: 'IDR',
-      currencySymbol: 'Rp',
-      balance: '48.750.000',
-      cardNumber: '•••• •••• •••• 4821',
-      holderName: 'RANIA KUSUMA',
-      gradientColors: [Color(0xFF1E3A5F), Color(0xFF0D1F3C)],
-      glowColor: Color(0xFF3B82F6),
-      flagEmoji: '🇮🇩',
-      changePercent: '+2.4%',
-      isPositiveChange: true,
-    ),
-    WalletCard(
-      currency: 'USD',
-      currencySymbol: '\$',
-      balance: '3,182.50',
-      cardNumber: '•••• •••• •••• 7293',
-      holderName: 'RANIA KUSUMA',
-      gradientColors: [Color(0xFF1A3340), Color(0xFF0A1A20)],
-      glowColor: Color(0xFF06B6D4),
-      flagEmoji: '🇺🇸',
-      changePercent: '-0.8%',
-      isPositiveChange: false,
-    ),
-    WalletCard(
-      currency: 'CNY',
-      currencySymbol: '¥',
-      balance: '22,415.00',
-      cardNumber: '•••• •••• •••• 5564',
-      holderName: 'RANIA KUSUMA',
-      gradientColors: [Color(0xFF3D1A1A), Color(0xFF1A0A0A)],
-      glowColor: Color(0xFFEF4444),
-      flagEmoji: '🇨🇳',
-      changePercent: '+1.1%',
-      isPositiveChange: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _buildCards();
+  }
+
+  @override
+  void didUpdateWidget(covariant WalletCardCarouselWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.balances != oldWidget.balances) {
+      _buildCards();
+    }
+  }
+
+  void _buildCards() {
+    if (widget.balances == null || widget.balances!.length < 3) return;
+
+    final idrFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+    final usdFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2);
+    final cnyFormat = NumberFormat.currency(locale: 'zh_CN', symbol: '¥', decimalDigits: 2);
+
+    setState(() {
+      _cards = [
+        WalletCard(
+          currency: 'IDR',
+          currencySymbol: 'Rp',
+          balance: idrFormat.format(widget.balances![0]),
+          cardNumber: '•••• •••• •••• 4821',
+          holderName: 'RANIA KUSUMA',
+          gradientColors: [const Color(0xFF1E3A5F), const Color(0xFF0D1F3C)],
+          glowColor: const Color(0xFF3B82F6),
+          flagEmoji: '🇮🇩',
+          changePercent: '+2.4%',
+          isPositiveChange: true,
+        ),
+        WalletCard(
+          currency: 'USD',
+          currencySymbol: '\$',
+          balance: usdFormat.format(widget.balances![1]),
+          cardNumber: '•••• •••• •••• 7293',
+          holderName: 'RANIA KUSUMA',
+          gradientColors: [const Color(0xFF1A3340), const Color(0xFF0A1A20)],
+          glowColor: const Color(0xFF06B6D4),
+          flagEmoji: '🇺🇸',
+          changePercent: '-0.8%',
+          isPositiveChange: false,
+        ),
+        WalletCard(
+          currency: 'CNY',
+          currencySymbol: '¥',
+          balance: cnyFormat.format(widget.balances![2]),
+          cardNumber: '•••• •••• •••• 5564',
+          holderName: 'RANIA KUSUMA',
+          gradientColors: [const Color(0xFF3D1A1A), const Color(0xFF1A0A0A)],
+          glowColor: const Color(0xFFEF4444),
+          flagEmoji: '🇨🇳',
+          changePercent: '+1.1%',
+          isPositiveChange: true,
+        ),
+      ];
+    });
+  }
 
   @override
   void dispose() {
@@ -91,6 +123,9 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (_cards.isEmpty) {
+      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+    }
     return Column(
       children: [
         SizedBox(
@@ -119,7 +154,6 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
           ),
         ),
         const SizedBox(height: 16),
-        // Page indicator dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(_cards.length, (index) {
@@ -129,9 +163,7 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
               width: _currentIndex == index ? 20 : 6,
               height: 6,
               decoration: BoxDecoration(
-                color: _currentIndex == index
-                    ? _cards[index].glowColor
-                    : AppTheme.textMuted,
+                color: _currentIndex == index ? _cards[index].glowColor : const Color(0xFF94A3B8),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -144,7 +176,6 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
 
 class _WalletCardItem extends StatelessWidget {
   final WalletCard card;
-
   const _WalletCardItem({required this.card});
 
   @override
@@ -161,184 +192,47 @@ class _WalletCardItem extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  card.gradientColors[0].withAlpha(230),
-                  card.gradientColors[1].withAlpha(242),
+                  card.gradientColors[0].withOpacity(0.9),
+                  card.gradientColors[1].withOpacity(0.95),
                 ],
               ),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: card.glowColor.withAlpha(89), width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: card.glowColor.withAlpha(46),
-                  blurRadius: 32,
-                  offset: const Offset(0, 8),
-                  spreadRadius: -4,
-                ),
-              ],
+              border: Border.all(color: card.glowColor.withOpacity(0.35), width: 1),
             ),
-            child: Stack(
-              children: [
-                // Background circuit pattern
-                Positioned(
-                  right: -20,
-                  top: -20,
-                  child: _buildDecorativeCircle(card.glowColor, 120),
-                ),
-                Positioned(
-                  left: -30,
-                  bottom: -30,
-                  child: _buildDecorativeCircle(card.glowColor, 90),
-                ),
-                // Card content
-                Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Top row: currency flag + name + chip
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                card.flagEmoji,
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                card.currency,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white.withAlpha(230),
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // NFC chip icon
-                          Container(
-                            width: 32,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.white.withAlpha(77),
-                                  Colors.white.withAlpha(26),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: Colors.white.withAlpha(51),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.contactless_rounded,
-                              size: 14,
-                              color: Colors.white.withAlpha(179),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      // Balance
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            card.currencySymbol,
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withAlpha(179),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            card.balance,
-                            style: GoogleFonts.inter(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: -0.5,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      // Change indicator
                       Row(
                         children: [
-                          Icon(
-                            card.isPositiveChange
-                                ? Icons.trending_up_rounded
-                                : Icons.trending_down_rounded,
-                            size: 14,
-                            color: card.isPositiveChange
-                                ? AppTheme.success
-                                : AppTheme.error,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${card.changePercent} today',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: card.isPositiveChange
-                                  ? AppTheme.success
-                                  : AppTheme.error,
-                            ),
-                          ),
+                          Text(card.flagEmoji, style: const TextStyle(fontSize: 18)),
+                          const SizedBox(width: 8),
+                          Text(card.currency, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
                         ],
                       ),
-                      const Spacer(),
-                      // Bottom row: card number + holder
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            card.cardNumber,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withAlpha(128),
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          Text(
-                            card.holderName,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withAlpha(153),
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ],
-                      ),
+                      const Icon(Icons.contactless_rounded, size: 20, color: Colors.white54),
                     ],
                   ),
-                ),
-              ],
+                  const Spacer(),
+                  Text(card.currencySymbol, style: GoogleFonts.inter(fontSize: 16, color: Colors.white70)),
+                  Text(card.balance, style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(card.cardNumber, style: GoogleFonts.inter(fontSize: 12, color: Colors.white38, letterSpacing: 1.2)),
+                      Text(card.holderName, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white54)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDecorativeCircle(Color color, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withAlpha(20), width: 1),
       ),
     );
   }

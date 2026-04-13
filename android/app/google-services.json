@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "252073680114",
+    "project_id": "neopay-42b9a",
+    "storage_bucket": "neopay-42b9a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:252073680114:android:81a87a6ab720525791446b",
+        "android_client_info": {
+          "package_name": "com.example.project2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMRV6C3aFOqwU_odJUIplazn8jrX8XIuI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

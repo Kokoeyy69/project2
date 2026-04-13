@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../routes/app_routes.dart';
 import '../../widgets/app_navigation.dart';
@@ -16,9 +18,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // TODO: Replace with Riverpod/Bloc for production
   int _currentNavIndex = 0;
   int _currentCardIndex = 0;
+  Stream<DocumentSnapshot>? _balanceStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupBalanceStream();
+  }
+
+  void _setupBalanceStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        _balanceStream = FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .snapshots();
+      });
+    }
+  }
 
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
@@ -42,28 +62,38 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBody: true,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: HomeHeaderWidget(currentCardIndex: _currentCardIndex),
-            ),
-            SliverToBoxAdapter(
-              child: WalletCardCarouselWidget(onCardChanged: _onCardChanged),
-            ),
-            SliverToBoxAdapter(child: AiCommandBarWidget()),
-            SliverToBoxAdapter(
-              child: QuickActionsGridWidget(
-                onTransferTap: () => Navigator.pushNamed(
-                  context,
-                  AppRoutes.transferKeypadScreen,
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: _balanceStream,
+          builder: (context, snapshot) {
+            final data = snapshot.data?.data() as Map<String, dynamic>?;
+            final balances = data?['balance'] as List<dynamic>?;
+
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: HomeHeaderWidget(currentCardIndex: _currentCardIndex),
                 ),
-              ),
-            ),
-            SliverToBoxAdapter(child: RecentTransactionsWidget()),
-            // Bottom padding for nav bar
-            const SliverToBoxAdapter(child: SizedBox(height: 96)),
-          ],
+                SliverToBoxAdapter(
+                  child: WalletCardCarouselWidget(
+                    balances: balances,
+                    onCardChanged: _onCardChanged,
+                  ),
+                ),
+                SliverToBoxAdapter(child: AiCommandBarWidget()),
+                SliverToBoxAdapter(
+                  child: QuickActionsGridWidget(
+                    onTransferTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.transferKeypadScreen,
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(child: RecentTransactionsWidget()),
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+              ],
+            );
+          },
         ),
       ),
       bottomNavigationBar: AppNavigation(
