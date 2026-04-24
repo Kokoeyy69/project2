@@ -1,4 +1,7 @@
 import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -28,152 +31,132 @@ class _ActivityScreenState extends State<ActivityScreen> {
   ];
 
   // Weekly spending data (Mon-Sun)
-  final List<double> _weeklySpending = [
-    320000,
-    150000,
-    480000,
-    220000,
-    560000,
-    380000,
-    290000,
-  ];
-  final List<String> _weekDays = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
+  // Weekly spending data (Mon-Sun)
+  List<double> _weeklySpending = List.filled(7, 0.0); // Diisi 0 semua dari Senin-Minggu
+  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // Category breakdown
-  final List<_CategoryData> _categories = [
-    _CategoryData('Shopping', 42, const Color(0xFF8B5CF6)),
-    _CategoryData('Food', 31, AppTheme.warning),
-    _CategoryData('Bills', 27, AppTheme.error),
-  ];
+  // Category breakdown & Summary
+  List<_CategoryData> _categories = [];
+  double _totalIncome = 0.0;
+  double _totalExpense = 0.0;
 
-  final List<Map<String, dynamic>> _transactions = [
-    {
-      'id': 't1',
-      'date': 'Today',
-      'name': 'Tokopedia',
-      'category': 'Shopping',
-      'amount': '-Rp 450.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.shopping_bag_rounded,
-      'color': const Color(0xFF8B5CF6),
-      'time': '14:32',
-      'status': 'completed',
-    },
-    {
-      'id': 't2',
-      'date': 'Today',
-      'name': 'Kopi Kenangan',
-      'category': 'Food',
-      'amount': '-Rp 38.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.coffee_rounded,
-      'color': const Color(0xFFF59E0B),
-      'time': '09:15',
-      'status': 'completed',
-    },
-    {
-      'id': 't3',
-      'date': 'Today',
-      'name': 'PLN Electricity',
-      'category': 'Bills',
-      'amount': '-Rp 320.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.bolt_rounded,
-      'color': const Color(0xFFEF4444),
-      'time': '08:00',
-      'status': 'completed',
-    },
-    {
-      'id': 't4',
-      'date': 'Yesterday',
-      'name': 'Salary Deposit',
-      'category': 'Transfer',
-      'amount': '+\$2,400.00',
-      'amountSign': 1,
-      'currency': 'USD',
-      'icon': Icons.account_balance_rounded,
-      'color': const Color(0xFF10B981),
-      'time': '09:00',
-      'status': 'completed',
-    },
-    {
-      'id': 't5',
-      'date': 'Yesterday',
-      'name': 'Grab Food',
-      'category': 'Food',
-      'amount': '-Rp 75.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.delivery_dining_rounded,
-      'color': const Color(0xFF10B981),
-      'time': '19:45',
-      'status': 'completed',
-    },
-    {
-      'id': 't6',
-      'date': 'Yesterday',
-      'name': 'Netflix',
-      'category': 'Bills',
-      'amount': '-\$15.99',
-      'amountSign': -1,
-      'currency': 'USD',
-      'icon': Icons.play_circle_rounded,
-      'color': const Color(0xFFEF4444),
-      'time': '00:01',
-      'status': 'completed',
-    },
-    {
-      'id': 't7',
-      'date': 'Apr 8',
-      'name': 'IKEA Indonesia',
-      'category': 'Shopping',
-      'amount': '-Rp 1.250.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.chair_rounded,
-      'color': const Color(0xFF3B82F6),
-      'time': '15:20',
-      'status': 'completed',
-    },
-    {
-      'id': 't8',
-      'date': 'Apr 8',
-      'name': 'Indihome Internet',
-      'category': 'Bills',
-      'amount': '-Rp 285.000',
-      'amountSign': -1,
-      'currency': 'IDR',
-      'icon': Icons.wifi_rounded,
-      'color': const Color(0xFF06B6D4),
-      'time': '10:00',
-      'status': 'completed',
-    },
-    {
-      'id': 't9',
-      'date': 'Apr 8',
-      'name': 'Sushi Tei',
-      'category': 'Food',
-      'amount': '-¥ 320',
-      'amountSign': -1,
-      'currency': 'CNY',
-      'icon': Icons.restaurant_rounded,
-      'color': const Color(0xFFF59E0B),
-      'time': '13:00',
-      'status': 'completed',
-    },
-  ];
+  List<Map<String, dynamic>> _transactions = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchFirebaseTransactions();
+  }
+
+  void _fetchFirebaseTransactions() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _isLoading = true);
+
+    FirebaseFirestore.instance
+        .collection('transactions')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      
+      final List<Map<String, dynamic>> liveData = [];
+      
+      // Variabel penampung hitungan sementara
+      double tempIncome = 0.0;
+      double tempExpense = 0.0;
+      List<double> tempWeekly = List.filled(7, 0.0);
+      Map<String, double> catTotals = {};
+      double totalCatExpense = 0.0;
+
+      // Cari rentang tanggal minggu ini (Senin - Minggu)
+      DateTime now = DateTime.now();
+      int currentWeekday = now.weekday; 
+      DateTime startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: currentWeekday - 1));
+      DateTime endOfWeek = startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
+        final currency = data['currency'] ?? 'IDR';
+        
+        final isExpense = data['type'] == 'transfer_out'; 
+        final category = isExpense ? 'Transfer' : 'Shopping'; 
+        
+        String amountStr = amountVal.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (m) => '${m[1]}.',
+        );
+        String prefix = currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp ');
+        
+        Timestamp? ts = data['timestamp'] as Timestamp?;
+        DateTime dt = ts != null ? ts.toDate() : DateTime.now();
+        
+        // --- PROSES HITUNG MATEMATIKA ---
+        if (isExpense) {
+          tempExpense += amountVal;
+          catTotals[category] = (catTotals[category] ?? 0.0) + amountVal;
+          totalCatExpense += amountVal;
+
+          if (dt.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) && 
+              dt.isBefore(endOfWeek.add(const Duration(seconds: 1)))) {
+            int dayIndex = dt.weekday - 1; 
+            tempWeekly[dayIndex] += amountVal;
+          }
+        } else {
+          tempIncome += amountVal;
+        }
+
+        liveData.add({
+          'id': doc.id,
+          'date': DateFormat('MMM d').format(dt),
+          'name': data['recipientName'] ?? 'Unknown Merchant',
+          'category': category,
+          'amount': isExpense ? '-$prefix$amountStr' : '+$prefix$amountStr', 
+          'amountSign': isExpense ? -1 : 1,
+          'currency': currency,
+          'icon': Icons.swap_horiz_rounded,
+          'color': const Color(0xFF3B82F6),
+          'time': DateFormat('HH:mm').format(dt),
+          'status': data['status'] ?? 'completed',
+        });
+      }
+
+      // Olah persentase Category Breakdown
+      List<_CategoryData> tempCategories = [];
+      List<Color> catColors = [const Color(0xFF8B5CF6), AppTheme.warning, AppTheme.error, const Color(0xFF3B82F6)];
+      int colorIdx = 0;
+      
+      catTotals.forEach((key, value) {
+        int percentage = totalCatExpense > 0 ? ((value / totalCatExpense) * 100).round() : 0;
+        if (percentage > 0) {
+          tempCategories.add(_CategoryData(key, percentage, catColors[colorIdx % catColors.length]));
+          colorIdx++;
+        }
+      });
+      tempCategories.sort((a, b) => b.percentage.compareTo(a.percentage));
+
+      if (mounted) {
+        setState(() {
+          _transactions = liveData;
+          _totalIncome = tempIncome;
+          _totalExpense = tempExpense;
+          _weeklySpending = tempWeekly;
+          _categories = tempCategories;
+          _isLoading = false;
+        });
+      }
+    }, onError: (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+        _showConnectionErrorModal();
+      }
+    });
+  }
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
     if (index == 0) {
@@ -554,6 +537,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _buildLineChart() {
     final maxVal = _weeklySpending.reduce((a, b) => a > b ? a : b);
+    final interval = maxVal > 0 ? maxVal / 3 : 1.0;
     return SizedBox(
       height: 120,
       child: LineChart(
@@ -561,7 +545,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: maxVal / 3,
+            horizontalInterval: interval,
             getDrawingHorizontalLine: (value) =>
                 FlLine(color: AppTheme.separator, strokeWidth: 0.5),
           ),
@@ -600,7 +584,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           minX: 0,
           maxX: 6,
           minY: 0,
-          maxY: maxVal * 1.2,
+          maxY: maxVal > 0 ? maxVal * 1.2 : 100.0,
           lineBarsData: [
             LineChartBarData(
               spots: List.generate(
@@ -812,6 +796,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // ── Summary Row ───────────────────────────────────────────────────────────
 
   Widget _buildSummaryRow() {
+    final NumberFormat currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Row(
@@ -819,7 +804,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           Expanded(
             child: _buildSummaryCard(
               'Income',
-              '+\$2,400',
+              currencyFormat.format(_totalIncome),
               AppTheme.success,
               Icons.arrow_downward_rounded,
             ),
@@ -828,7 +813,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           Expanded(
             child: _buildSummaryCard(
               'Expenses',
-              '-Rp 2.4M',
+              currencyFormat.format(_totalExpense),
               AppTheme.error,
               Icons.arrow_upward_rounded,
             ),
@@ -866,26 +851,32 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 child: Icon(icon, color: color, size: 14),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: AppTheme.textMuted,
-                      fontWeight: FontWeight.w500,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppTheme.textMuted,
+                        fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    amount,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: color,
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        amount,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
                     ),
                   ),
                 ],
+                ),
               ),
             ],
           ),

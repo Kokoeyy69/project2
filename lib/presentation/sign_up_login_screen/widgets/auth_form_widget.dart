@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -90,16 +91,28 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
           password: _passwordController.text,
         );
       } else {
-        await _auth.createUserWithEmailAndPassword(
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
+        String newUid = userCredential.user!.uid;
+
+        await FirebaseFirestore.instance.collection('users').doc(newUid).set({
+          'name': _nameController.text.trim(), // Ambil nama dari inputan form
+          'email': _emailController.text.trim(),
+          'balance': 0, // Inisialisasi saldo dengan angka 0
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       }
       if (!mounted) return;
       widget.onSuccess();
     } on FirebaseAuthException catch (e) {
       setState(() {
         _errorMessage = e.message;
+      });
+      } catch (e) {
+        setState(() {
+        _errorMessage = "Gagal membuat dokumen database: $e";
       });
     } finally {
       if (mounted) {

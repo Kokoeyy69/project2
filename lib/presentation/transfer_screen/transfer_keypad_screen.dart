@@ -1,4 +1,6 @@
 import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
@@ -112,7 +114,7 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
     _showConfirmDialog();
   }
 
-  void _showConfirmDialog() {
+ void _showConfirmDialog() {
     showDialog(
       context: context,
       builder: (ctx) => BackdropFilter(
@@ -134,12 +136,13 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryMuted,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
@@ -158,7 +161,9 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
+                          
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -182,7 +187,9 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.success,
+                            
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -200,37 +207,108 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                final contactNames = {
-                  'c1': 'Rania Kusuma',
-                  'c2': 'Budi Santoso',
-                  'c3': 'Siti Rahayu',
-                  'c4': 'Ahmad Fauzi',
-                  'c5': 'Dewi Lestari',
-                };
-                final recipientName =
-                    contactNames[_selectedContactId] ?? 'Recipient';
-                final rateKey = '${_selectedCurrency}_$_targetCurrency';
-                final rate = _rates[rateKey] ?? 1.0;
-                final rateStr = _selectedCurrency == _targetCurrency
-                    ? '1.00'
-                    : rate < 1
-                    ? rate.toStringAsFixed(6)
-                    : rate.toStringAsFixed(4);
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRoutes.transferSuccessScreen,
-                  (_) => false,
-                  arguments: {
-                    'recipientName': recipientName,
-                    'amountSent': _amount,
-                    'sourceCurrency': _selectedCurrency,
-                    'exchangeRate': rateStr,
-                    'amountReceived': _getConvertedAmount(),
-                    'targetCurrency': _targetCurrency,
-                  },
-                );
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    final transferAmount = double.tryParse(_amount) ?? 0;
+
+                    // 1. Cek Saldo
+                    final userDoc = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .get();
+                    
+                    final currentBalance = (userDoc.data()?['balance'] ?? 0) as num;
+
+                    // 2. Tolak jika saldo kurang
+                    if (transferAmount > currentBalance) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Insufficient balance. Your balance is Rp $currentBalance',
+                                    style: GoogleFonts.inter(color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: AppTheme.error,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        );
+                      }
+                      return; // STOP DI SINI
+                    }
+
+                    // 3. Potong Saldo
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .update({
+                      'balance': FieldValue.increment(-transferAmount),
+                    });
+
+                    // 4. Siapkan nama penerima untuk riwayat
+                    final contactNames = {
+                      'c1': 'Rania Kusuma',
+                      'c2': 'Budi Santoso',
+                      'c3': 'Siti Rahayu',
+                      'c4': 'Ahmad Fauzi',
+                      'c5': 'Dewi Lestari',
+                    };
+                    final recipientName =
+                        contactNames[_selectedContactId] ?? 'Recipient';
+
+                    // --- 5. INI DIA MESIN PENCATAT RIWAYATNYA! ---
+                    await FirebaseFirestore.instance.collection('transactions').add({
+                      'userId': user.uid,
+                      'recipientName': recipientName,
+                      'amount': transferAmount,
+                      'currency': _selectedCurrency,
+                      'type': 'transfer_out',
+                      'timestamp': FieldValue.serverTimestamp(),
+                      'status': 'completed',
+                    });
+                    // ---------------------------------------------
+
+                    // 6. Pindah ke Halaman Sukses
+                    final rateKey = '${_selectedCurrency}_$_targetCurrency';
+                    final rate = _rates[rateKey] ?? 1.0;
+                    final rateStr = _selectedCurrency == _targetCurrency
+                        ? '1.00'
+                        : rate < 1
+                        ? rate.toStringAsFixed(6)
+                        : rate.toStringAsFixed(4);
+
+                    if (mounted) {
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        AppRoutes.transferSuccessScreen,
+                        (_) => false,
+                        arguments: {
+                          'recipientName': recipientName,
+                          'amountSent': _amount,
+                          'sourceCurrency': _selectedCurrency,
+                          'exchangeRate': rateStr,
+                          'amountReceived': _getConvertedAmount(),
+                          'targetCurrency': _targetCurrency,
+                        },
+                      );
+                    }
+                  }
+                } catch (e) {
+                  debugPrint("Error potong saldo: $e");
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
@@ -248,7 +326,6 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -267,6 +344,11 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                   children: [
                     _buildCurrencySelector(),
                     const SizedBox(height: 12),
+                    
+                    // --- KOTAK NOMINAL BESAR YANG BARU DITAMBAHKAN ---
+                    _buildLargeAmountDisplay(),
+                    const SizedBox(height: 12),
+                    
                     _buildConversionPreview(),
                     const SizedBox(height: 12),
                     TransferContactListWidget(
@@ -296,6 +378,85 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
       ),
     );
   }
+
+  // --- FUNGSI BARU UNTUK MERENDER KOTAK NOMINAL ---
+  Widget _buildLargeAmountDisplay() {
+    // Format angkanya biar ada titik ribuannya
+    String displayVal = _amount.isEmpty ? '0' : _amount;
+    if (_amount.isNotEmpty) {
+      final val = double.tryParse(_amount) ?? 0.0;
+      displayVal = val.toStringAsFixed(0).replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+        (m) => '${m[1]}.',
+      );
+    }
+
+    String currencySymbol = 'Rp ';
+    if (_selectedCurrency == 'USD') currencySymbol = '\$ ';
+    if (_selectedCurrency == 'CNY') currencySymbol = '¥ ';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surface.withAlpha(153),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.glassBorder, width: 0.5),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Amount',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  color: AppTheme.glassBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.primary.withAlpha(153), width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      currencySymbol,
+                      style: GoogleFonts.inter(
+                        fontSize: 24, 
+                        fontWeight: FontWeight.w600, 
+                        color: AppTheme.textSecondary
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        displayVal,
+                        style: GoogleFonts.inter(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ... (Sisa fungsi AppBar, Dropdown, dll tetap sama)
 
   Widget _buildAppBar() {
     return Padding(

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
@@ -13,15 +12,26 @@ class TransferViewModel extends ChangeNotifier {
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
 
-  void onKeyPress(String key) {
+  // Fungsi untuk menambah angka yang dipanggil UI
+  void appendDigit(String key) {
     HapticFeedback.lightImpact();
+    _appendNumber(key);
+    _updateDisplay();
+    notifyListeners();
+  }
 
-    if (key == 'backspace') {
-      _handleBackspace();
-    } else {
-      _appendNumber(key);
-    }
+  // Fungsi untuk menghapus 1 angka dari belakang (backspace)
+  void removeLastDigit() {
+    HapticFeedback.lightImpact();
+    _handleBackspace();
+    _updateDisplay();
+    notifyListeners();
+  }
 
+  // Fungsi untuk mereset angka jadi 0 (clear)
+  void clearAmount() {
+    HapticFeedback.lightImpact();
+    _numericAmount = 0.0;
     _updateDisplay();
     notifyListeners();
   }
@@ -38,6 +48,10 @@ class TransferViewModel extends ChangeNotifier {
 
   void _appendNumber(String number) {
     String currentAmount = _numericAmount.toStringAsFixed(0);
+    
+    // Batasi maksimal 12 digit (ratusan miliar) biar layout gak jebol
+    if (currentAmount.length >= 12) return;
+
     if (currentAmount == '0' && number != '0') {
       currentAmount = number;
     } else if (currentAmount != '0') {
@@ -48,11 +62,5 @@ class TransferViewModel extends ChangeNotifier {
 
   void _updateDisplay() {
     _displayAmount = _currencyFormat.format(_numericAmount);
-  }
-
-  void reset() {
-    _numericAmount = 0.0;
-    _updateDisplay();
-    notifyListeners();
   }
 }

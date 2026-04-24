@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import './widgets/transfer_contact_list_widget.dart'; // Tambahin baris ini
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -176,7 +177,7 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
     );
   }
 
-  Widget _buildPhoneLayout() {
+Widget _buildPhoneLayout() {
     final transferViewModel = context.watch<TransferViewModel>();
     return Column(
       children: [
@@ -185,30 +186,58 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. Input Nominal
+                AmountInputWidget(
+                  selectedWalletIndex: _selectedWalletIndex,
+                ),
+                const SizedBox(height: 24),
+                
+                // 2. Daftar Kontak Cepat Horizontal (Avatar Bulat)
+                Text(
+                  'Recent Transfers',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TransferContactListWidget(
+                  selectedContactId: _selectedRecipientId,
+                  onContactSelected: _onRecipientSelected,
+                ),
+                const SizedBox(height: 24),
+                
+                // 3. Daftar Kontak Lengkap Vertikal + Search
                 RecipientSelectorWidget(
                   selectedId: _selectedRecipientId,
                   onSelected: _onRecipientSelected,
                 ),
                 const SizedBox(height: 16),
+                
+                // 4. Pemilih Dompet Sumber
                 SourceWalletSelectorWidget(
                   selectedIndex: _selectedWalletIndex,
                   onSelected: _onWalletSelected,
                 ),
                 const SizedBox(height: 16),
-                AmountInputWidget(
-                  selectedWalletIndex: _selectedWalletIndex,
-                ),
-                const SizedBox(height: 16),
+                
+                // 5. AI Suggestion Strip
                 AiSuggestionStripWidget(
                   selectedWalletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 16),
+                
+                // 6. Rincian Biaya
                 TransferFeeBreakdownWidget(
                   amount: transferViewModel.numericAmount,
                   selectedWalletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 20),
+                
+                // 7. Tombol Konfirmasi
                 ConfirmTransferButtonWidget(
                   amount: transferViewModel.numericAmount,
                   recipientId: _selectedRecipientId,
@@ -219,9 +248,21 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
             ),
           ),
         ),
+        // Keypad tetap anteng di bawah
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: NumericKeypadWidget(onKeyTap: (String key) {  }, onBackspace: () {  }, displayAmount: '', onClear: () {  },),
+          child: NumericKeypadWidget(
+            displayAmount: transferViewModel.displayAmount,
+            onKeyTap: (String key) {
+              transferViewModel.appendDigit(key);
+            },
+            onBackspace: () {
+              transferViewModel.removeLastDigit();
+            },
+            onClear: () {
+              transferViewModel.clearAmount();
+            },
+          ),
         ),
       ],
     );

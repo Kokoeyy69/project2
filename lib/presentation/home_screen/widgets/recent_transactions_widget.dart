@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/status_badge_widget.dart';
 
@@ -89,85 +91,20 @@ class RecentTransactionsWidget extends StatefulWidget {
 }
 
 class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
-  // TODO: Replace with Riverpod/Bloc for production
-  late List<TransactionModel> _transactions;
-
-  static final List<Map<String, dynamic>> _transactionMaps = [
-    {
-      'id': 'TXN-001',
-      'merchantName': 'Tokopedia',
-      'category': 'Shopping',
-      'amount': '- Rp 425.000',
-      'currency': 'IDR',
-      'time': '2 min ago',
-      'isDebit': true,
-      'status': 'completed',
-      'categoryIcon': 'shopping_bag',
-      'categoryColor': 0xFF8B5CF6,
-      'recipientNote': null,
-    },
-    {
-      'id': 'TXN-002',
-      'merchantName': 'Ahmad Fauzi',
-      'category': 'Transfer Out',
-      'amount': '- \$120.00',
-      'currency': 'USD',
-      'time': '1h ago',
-      'isDebit': true,
-      'status': 'processing',
-      'categoryIcon': 'swap_horiz',
-      'categoryColor': 0xFF3B82F6,
-      'recipientNote': 'Rent share April',
-    },
-    {
-      'id': 'TXN-003',
-      'merchantName': 'Siti Rahayu',
-      'category': 'Transfer In',
-      'amount': '+ Rp 2.500.000',
-      'currency': 'IDR',
-      'time': '3h ago',
-      'isDebit': false,
-      'status': 'completed',
-      'categoryIcon': 'swap_horiz',
-      'categoryColor': 0xFF10B981,
-      'recipientNote': 'Project payment',
-    },
-    {
-      'id': 'TXN-004',
-      'merchantName': 'GoFood',
-      'category': 'Food & Dining',
-      'amount': '- Rp 87.000',
-      'currency': 'IDR',
-      'time': 'Yesterday',
-      'isDebit': true,
-      'status': 'failed',
-      'categoryIcon': 'restaurant',
-      'categoryColor': 0xFFEF4444,
-      'recipientNote': null,
-    },
-    {
-      'id': 'TXN-005',
-      'merchantName': 'Lion Air',
-      'category': 'Travel',
-      'amount': '- ¥1.850',
-      'currency': 'CNY',
-      'time': 'Yesterday',
-      'isDebit': true,
-      'status': 'pending',
-      'categoryIcon': 'flight',
-      'categoryColor': 0xFFF59E0B,
-      'recipientNote': 'CGK-SIN Apr 15',
-    },
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _transactions = _transactionMaps.map(TransactionModel.fromMap).toList();
+  // Fungsi pintar buat ngerubah timestamp jadi teks ala sosmed (1h ago, Just now)
+  String _getTimeAgo(Timestamp? timestamp) {
+    if (timestamp == null) return 'Just now';
+    final diff = DateTime.now().difference(timestamp.toDate());
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Column(
@@ -185,7 +122,9 @@ class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.pushNamed(context, '/activity');
+                },
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
@@ -213,20 +152,96 @@ class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppTheme.glassBorder, width: 0.5),
                 ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _transactions.length,
-                  separatorBuilder: (_, __) => Divider(
-                    color: AppTheme.separator,
-                    thickness: 0.5,
-                    height: 0,
-                    indent: 72,
-                  ),
-                  itemBuilder: (context, index) {
-                    return _TransactionItem(transaction: _transactions[index]);
-                  },
-                ),
+                
+                // --- KITA GANTI LISTVIEW STATIS JADI STREAMBUILDER FIREBASE ---
+                child: user == null
+                    ? const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(child: Text("Please login first", style: TextStyle(color: Colors.white))),
+                      )
+                    : StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('transactions')
+                            .where('userId', isEqualTo: user.uid)
+                            .orderBy('timestamp', descending: true)
+                            .limit(5) // Cuma ambil 5 transaksi terakhir biar hemat kuota
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(32),
+                              child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Center(child: Text('Error loading history', style: GoogleFonts.inter(color: Colors.white))),
+                            );
+                          }
+
+                          final docs = snapshot.data?.docs ?? [];
+
+                          // Kalau belum ada transaksi sama sekali
+                          if (docs.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Center(
+                                child: Text(
+                                  "No recent transactions yet.",
+                                  style: GoogleFonts.inter(color: AppTheme.textMuted),
+                                ),
+                              ),
+                            );
+                          }
+
+                          // Render riwayat betulan
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: docs.length,
+                            separatorBuilder: (_, __) => Divider(
+                              color: AppTheme.separator,
+                              thickness: 0.5,
+                              height: 0,
+                              indent: 72,
+                            ),
+                            itemBuilder: (context, index) {
+                              final data = docs[index].data() as Map<String, dynamic>;
+                              
+                              // Racik datanya biar pas sama UI
+                              final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
+                              final currency = data['currency'] ?? 'IDR';
+                              
+                              // Format angka biar ada titiknya
+                              String amountStr = amountVal.toStringAsFixed(0).replaceAllMapped(
+                                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                                (m) => '${m[1]}.',
+                              );
+
+                              String prefix = currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp ');
+                              
+                              // Masukin data Firebase ke TransactionModel bawaanmu
+                              final model = TransactionModel(
+                                id: docs[index].id,
+                                merchantName: data['recipientName'] ?? 'Unknown',
+                                category: data['type'] == 'transfer_out' ? 'Transfer Out' : 'Transaction',
+                                amount: '- $prefix$amountStr', // Kasih minus karena duit keluar
+                                currency: currency,
+                                time: _getTimeAgo(data['timestamp'] as Timestamp?),
+                                isDebit: true, // Debit = duit keluar
+                                status: TransactionModel._statusFromString(data['status'] ?? 'completed'),
+                                categoryIcon: Icons.swap_horiz_rounded, // Pakai icon transfer
+                                categoryColor: const Color(0xFF3B82F6), // Warna biru buat transfer
+                                recipientNote: null,
+                              );
+
+                              return _TransactionItem(transaction: model);
+                            },
+                          );
+                        },
+                      ),
               ),
             ),
           ),

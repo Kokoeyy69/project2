@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -55,79 +57,58 @@ class RecipientSelectorWidget extends StatefulWidget {
 }
 
 class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
-  // TODO: Replace with Riverpod/Bloc for production
   final TextEditingController _searchController = TextEditingController();
-  late List<RecipientModel> _recipients;
-  late List<RecipientModel> _filtered;
-
-  static final List<Map<String, dynamic>> _recipientMaps = [
-    {
-      'id': 'R001',
-      'name': 'Ahmad Fauzi',
-      'accountNumber': '••• 4821',
-      'bank': 'BCA',
-      'currency': 'IDR',
-      'imageUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_169492cd1-1763292671059.png',
-      'semanticLabel':
-          'Professional headshot of Indonesian man with short dark hair in white shirt',
-      'isAiSuggested': true,
-    },
-    {
-      'id': 'R002',
-      'name': 'Siti Rahayu',
-      'accountNumber': '••• 7293',
-      'bank': 'Mandiri',
-      'currency': 'IDR',
-      'imageUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_14e813e64-1772288853436.png',
-      'semanticLabel': 'Young Indonesian woman with hijab smiling at camera',
-      'isAiSuggested': false,
-    },
-    {
-      'id': 'R003',
-      'name': 'Wei Liang Chen',
-      'accountNumber': '••• 5564',
-      'bank': 'ICBC',
-      'currency': 'CNY',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1713870816826-08e4b536d1ed',
-      'semanticLabel':
-          'Young East Asian man with glasses in casual blue shirt outdoors',
-      'isAiSuggested': true,
-    },
-    {
-      'id': 'R004',
-      'name': 'Maya Putri',
-      'accountNumber': '••• 3317',
-      'bank': 'BNI',
-      'currency': 'IDR',
-      'imageUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_18d554571-1767492203815.png',
-      'semanticLabel':
-          'Young Javanese woman with long dark hair smiling warmly',
-      'isAiSuggested': false,
-    },
-    {
-      'id': 'R005',
-      'name': 'James Thornton',
-      'accountNumber': '••• 9042',
-      'bank': 'Chase',
-      'currency': 'USD',
-      'imageUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_12a142cca-1772829111154.png',
-      'semanticLabel':
-          'Middle-aged Caucasian man in navy blazer with brown hair',
-      'isAiSuggested': false,
-    },
-  ];
+  List<RecipientModel> _recipients = [];
+  List<RecipientModel> _filtered = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _recipients = _recipientMaps.map(RecipientModel.fromMap).toList();
-    _filtered = List.from(_recipients);
     _searchController.addListener(_onSearch);
+    _fetchUsersFromFirebase();
+  }
+
+  void _fetchUsersFromFirebase() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .snapshots()
+        .listen((snapshot) {
+      final List<RecipientModel> liveUsers = [];
+
+      for (var doc in snapshot.docs) {
+        // Jangan tampilkan akun kita sendiri di daftar penerima
+        if (currentUser != null && doc.id == currentUser.uid) continue;
+
+        final data = doc.data();
+        final name = data['name'] ?? 'Unknown User';
+        final email = data['email'] ?? 'No Email';
+        
+        liveUsers.add(
+          RecipientModel(
+            id: doc.id, // UID asli dari Firebase
+            name: name,
+            accountNumber: email, // Kita pinjam field email buat nampilin di bawah nama
+            bank: 'NeoPay',
+            currency: 'IDR',
+            // Bikin avatar otomatis dari inisial nama kalau belum ada foto
+            imageUrl: data['photoUrl'] ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=3B82F6&color=fff',
+            semanticLabel: 'Profile of $name',
+            isAiSuggested: false, 
+          ),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _recipients = liveUsers;
+          _onSearch(); // Jalankan filter biar list-nya terupdate
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   void _onSearch() {
@@ -136,12 +117,12 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
       _filtered = query.isEmpty
           ? List.from(_recipients)
           : _recipients
-                .where(
-                  (r) =>
-                      r.name.toLowerCase().contains(query) ||
-                      r.bank.toLowerCase().contains(query),
-                )
-                .toList();
+              .where(
+                (r) =>
+                    r.name.toLowerCase().contains(query) ||
+                    r.accountNumber.toLowerCase().contains(query),
+              )
+              .toList();
     });
   }
 
@@ -178,25 +159,6 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentMuted,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'AI Suggested',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.accent,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -217,7 +179,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
                       color: AppTheme.textPrimary,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Search recipient or bank...',
+                      hintText: 'Search recipient email or name...',
                       hintStyle: GoogleFonts.inter(
                         fontSize: 13,
                         color: AppTheme.textMuted,
@@ -233,27 +195,52 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
                   ),
                 ),
               ),
-              // Recipient list
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _filtered.length,
-                separatorBuilder: (_, __) => Divider(
-                  color: AppTheme.separator,
-                  height: 0,
-                  thickness: 0.5,
-                  indent: 68,
+              
+              // Recipient list atau Loading
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                )
+              else if (_filtered.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Center(
+                    child: Text(
+                      'No users found',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _filtered.length,
+                  separatorBuilder: (_, __) => Divider(
+                    color: AppTheme.separator,
+                    height: 0,
+                    thickness: 0.5,
+                    indent: 68,
+                  ),
+                  itemBuilder: (context, index) {
+                    final r = _filtered[index];
+                    final isSelected = r.id == widget.selectedId;
+                    return _RecipientTile(
+                      recipient: r,
+                      isSelected: isSelected,
+                      onTap: () => widget.onSelected(r.id),
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final r = _filtered[index];
-                  final isSelected = r.id == widget.selectedId;
-                  return _RecipientTile(
-                    recipient: r,
-                    isSelected: isSelected,
-                    onTap: () => widget.onSelected(r.id),
-                  );
-                },
-              ),
               const SizedBox(height: 8),
             ],
           ),
