@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/app_theme.dart';
@@ -235,10 +237,77 @@ class _ConfirmTransferButtonWidgetState
                       onPressed: () async {
                         Navigator.pop(context);
                         setState(() => _isLoading = true);
-                        // TODO: Replace with actual transfer API call
-                        await Future.delayed(
-                          const Duration(milliseconds: 1800),
-                        );
+                        
+                        // --- KODE FIREBASE UNTUK TRANSFER ASLI ---
+                        // --- KODE FIREBASE UNTUK TRANSFER ASLI & POTONG SALDO ---
+                        try {
+                          final user = FirebaseAuth.instance.currentUser;
+                          if (user != null) {
+                            final db = FirebaseFirestore.instance;
+                            // Referensi ke dokumen user dan dokumen transaksi baru
+                            final userRef = db.collection('users').doc(user.uid);
+                            final newTxRef = db.collection('transactions').doc(); 
+
+                            // Jalankan Firestore Transaction (All-or-Nothing)
+                            await db.runTransaction((transaction) async {
+                              // 1. Baca data user saat ini
+                              final userSnapshot = await transaction.get(userRef);
+                              if (!userSnapshot.exists) {
+                                throw Exception("User_Not_Found");
+                              }
+
+                              final currentBalance = (userSnapshot.data()?['balance'] as num?)?.toDouble() ?? 0.0;
+
+                              // 2. Validasi: Saldo cukup nggak?
+                              if (currentBalance < widget.amount) {
+                                throw Exception("Insufficient_Balance");
+                              }
+
+                              // 3. Potong saldo utama di tabel users
+                              transaction.update(userRef, {
+                                'balance': currentBalance - widget.amount,
+                              });
+
+                              // 4. Catat riwayat di tabel transactions
+                              transaction.set(newTxRef, {
+                                'userId': user.uid,
+                                'recipientName': widget.recipientId, 
+                                'amount': widget.amount,
+                                'currency': currency,
+                                'type': 'transfer_out',
+                                'status': 'completed',
+                                'timestamp': FieldValue.serverTimestamp(),
+                              });
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint("Gagal transfer: $e");
+                          if (!mounted) return;
+                          
+                          // Matikan loading animasi muter-muter
+                          setState(() => _isLoading = false);
+                          
+                          // Munculkan notifikasi error ke user pakai SnackBar
+                          String errorMsg = 'Transfer failed. Please try again.';
+                          if (e.toString().contains('Insufficient_Balance')) {
+                            errorMsg = 'Saldo kamu tidak cukup, Bos!';
+                          }
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                errorMsg,
+                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                              backgroundColor: AppTheme.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return; // STOP! Jangan pindah ke halaman Home kalau gagal
+                        }
+                        // -----------------------------------------
+                        // -----------------------------------------
+
                         if (!mounted) return;
                         setState(() => _isLoading = false);
                         Navigator.pushNamedAndRemoveUntil(
@@ -276,13 +345,12 @@ class _ConfirmTransferButtonWidgetState
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: _canSubmit ? (_) => _scaleController.forward() : null,
-      onTapUp: _canSubmit
-          ? (_) {
-              _scaleController.reverse();
-              _confirm();
-            }
-          : null,
+      // KITA UBAH BIAR SELALU BISA DIKLIK (Nggak pakai ngecek _canSubmit lagi di sini)
+      onTapDown: (_) => _scaleController.forward(),
+      onTapUp: (_) {
+        _scaleController.reverse();
+        _confirm(); // Fungsi _confirm nanti yang nentuin lanjut atau nolak
+      },
       onTapCancel: () => _scaleController.reverse(),
       child: AnimatedBuilder(
         animation: _scaleAnimation,
@@ -356,3 +424,4 @@ class _ConfirmTransferButtonWidgetState
     );
   }
 }
+

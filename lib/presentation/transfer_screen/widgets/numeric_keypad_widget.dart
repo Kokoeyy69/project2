@@ -1,17 +1,27 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 
 import '../../../theme/app_theme.dart';
-import '../transfer_view_model.dart';
 
 class NumericKeypadWidget extends StatelessWidget {
-  const NumericKeypadWidget({super.key, required void Function(String key) onKeyTap, required void Function() onBackspace, required String displayAmount, required void Function() onClear});
+  // 1. Simpan parameternya di sini biar gak ilang
+  final Function(String) onKeyTap;
+  final VoidCallback onBackspace;
+  final VoidCallback onClear;
+  final String displayAmount;
+
+  const NumericKeypadWidget({
+    super.key,
+    required this.onKeyTap,
+    required this.onBackspace,
+    required this.onClear,
+    required this.displayAmount,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final transferViewModel = context.read<TransferViewModel>();
+    // 2. Provider udah dihapus, kita murni pakai parameter lemparan dari atas
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
@@ -41,7 +51,8 @@ class NumericKeypadWidget extends StatelessWidget {
                           ),
                           child: _KeyButton(
                             label: '$num',
-                            onTap: () => transferViewModel.onKeyPress('$num'),
+                            // 3. Panggil fungsi onKeyTap
+                            onTap: () => onKeyTap('$num'),
                           ),
                         ),
                       );
@@ -49,24 +60,28 @@ class NumericKeypadWidget extends StatelessWidget {
                   ),
                 );
               }),
-              // Bottom row: . 0 backspace
+              // Bottom row: C 0 backspace
               Row(
                 children: [
                   Expanded(
-                    child: _KeyButton(label: '.', onTap: () {}),
+                    // Tombol titik (.) diubah jadi C (Clear)
+                    child: _KeyButton(
+                      label: 'C', 
+                      onTap: onClear,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _KeyButton(
                       label: '0',
-                      onTap: () => transferViewModel.onKeyPress('0'),
+                      onTap: () => onKeyTap('0'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _KeyButton(
                       icon: Icons.backspace_outlined,
-                      onTap: () => transferViewModel.onKeyPress('backspace'),
+                      onTap: onBackspace,
                     ),
                   ),
                 ],
@@ -88,6 +103,9 @@ class _KeyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Biar tombol C warnanya merah dikit
+    final isClearBtn = label == 'C';
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -96,7 +114,10 @@ class _KeyButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.surfaceVariant.withAlpha(180),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.glassBorder, width: 0.5),
+          border: Border.all(
+            color: isClearBtn ? AppTheme.error.withAlpha(100) : AppTheme.glassBorder, 
+            width: 0.5
+          ),
         ),
         alignment: Alignment.center,
         child: label != null
@@ -105,7 +126,7 @@ class _KeyButton extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+                  color: isClearBtn ? AppTheme.error : AppTheme.textPrimary,
                 ),
               )
             : Icon(

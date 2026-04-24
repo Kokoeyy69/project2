@@ -25,18 +25,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _setupBalanceStream();
-  }
-
-  void _setupBalanceStream() {
+    // KITA KUNCI KONEKSINYA DI SINI BIAR GAK RESET TERUS
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      setState(() {
-        _balanceStream = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .snapshots();
-      });
+      _balanceStream = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots();
     }
   }
 
@@ -63,10 +58,31 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         bottom: false,
         child: StreamBuilder<DocumentSnapshot>(
-          stream: _balanceStream,
+          // PANGGIL VARIABEL YANG UDAH DIKUNCI TADI
+          stream: _balanceStream, 
           builder: (context, snapshot) {
+            
+            // Loading cuma jalan sekali di awal
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Colors.purple));
+            }
+
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+            }
+
             final data = snapshot.data?.data() as Map<String, dynamic>?;
-            final balances = data?['balance'] as List<dynamic>?;
+
+            if (data == null) {
+              return const Center(
+                child: Text("Data tidak ditemukan di Firestore!", 
+                style: TextStyle(color: Colors.white))
+              );
+            }
+
+            // Data berhasil ditarik dan UI dirender
+            final balanceValue = data['balance'] ?? 0;
+            final balances = [balanceValue];
 
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),
@@ -80,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onCardChanged: _onCardChanged,
                   ),
                 ),
-                SliverToBoxAdapter(child: AiCommandBarWidget()),
+                const SliverToBoxAdapter(child: AiCommandBarWidget()),
                 SliverToBoxAdapter(
                   child: QuickActionsGridWidget(
                     onTransferTap: () => Navigator.pushNamed(
@@ -89,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(child: RecentTransactionsWidget()),
+                const SliverToBoxAdapter(child: RecentTransactionsWidget()),
                 const SliverToBoxAdapter(child: SizedBox(height: 96)),
               ],
             );

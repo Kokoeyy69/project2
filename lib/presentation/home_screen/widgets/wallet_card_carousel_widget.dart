@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../../theme/app_theme.dart';
-
-// Model data ditaruh di sini agar file ini mandiri
 class WalletCard {
   final String currency;
   final String currencySymbol;
@@ -67,20 +64,28 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
   }
 
   void _buildCards() {
-    if (widget.balances == null || widget.balances!.length < 3) return;
+    // REVISI: Ganti syaratnya, asal data nggak kosong aja dia jalan
+    if (widget.balances == null || widget.balances!.isEmpty) return;
 
-    final idrFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
-    final usdFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2);
-    final cnyFormat = NumberFormat.currency(locale: 'zh_CN', symbol: '¥', decimalDigits: 2);
+    // Ambil saldo IDR dari Firebase (index ke-0)
+    final double idrBalance = (widget.balances![0] as num).toDouble();
+    
+    // Bikin konversi bohongan buat USD dan CNY biar kartunya gak kosong
+    final double usdBalance = idrBalance / 16200; // Asumsi kurs
+    final double cnyBalance = idrBalance / 2200;
+
+    final idrFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final usdFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$ ', decimalDigits: 2);
+    final cnyFormat = NumberFormat.currency(locale: 'zh_CN', symbol: '¥ ', decimalDigits: 2);
 
     setState(() {
       _cards = [
         WalletCard(
           currency: 'IDR',
           currencySymbol: 'Rp',
-          balance: idrFormat.format(widget.balances![0]),
+          balance: idrFormat.format(idrBalance),
           cardNumber: '•••• •••• •••• 4821',
-          holderName: 'RANIA KUSUMA',
+          holderName: 'ENRICO TEST', // Sudah kusesuaikan dengan data test Firebase-mu
           gradientColors: [const Color(0xFF1E3A5F), const Color(0xFF0D1F3C)],
           glowColor: const Color(0xFF3B82F6),
           flagEmoji: '🇮🇩',
@@ -90,9 +95,9 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
         WalletCard(
           currency: 'USD',
           currencySymbol: '\$',
-          balance: usdFormat.format(widget.balances![1]),
+          balance: usdFormat.format(usdBalance),
           cardNumber: '•••• •••• •••• 7293',
-          holderName: 'RANIA KUSUMA',
+          holderName: 'ENRICO TEST',
           gradientColors: [const Color(0xFF1A3340), const Color(0xFF0A1A20)],
           glowColor: const Color(0xFF06B6D4),
           flagEmoji: '🇺🇸',
@@ -102,9 +107,9 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
         WalletCard(
           currency: 'CNY',
           currencySymbol: '¥',
-          balance: cnyFormat.format(widget.balances![2]),
+          balance: cnyFormat.format(cnyBalance),
           cardNumber: '•••• •••• •••• 5564',
-          holderName: 'RANIA KUSUMA',
+          holderName: 'ENRICO TEST',
           gradientColors: [const Color(0xFF3D1A1A), const Color(0xFF1A0A0A)],
           glowColor: const Color(0xFFEF4444),
           flagEmoji: '🇨🇳',
