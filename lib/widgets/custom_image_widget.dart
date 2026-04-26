@@ -4,15 +4,19 @@ import '../core/app_export.dart';
 
 extension ImageTypeExtension on String {
   ImageType get imageType {
-    if (startsWith('http') || startsWith('https')) {
+    final lower = toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
       return ImageType.network;
-    } else if (endsWith('.svg')) {
-      return ImageType.svg;
-    } else if (startsWith('file: //')) {
-      return ImageType.file;
-    } else {
-      return ImageType.png;
     }
+    if (lower.endsWith('.svg')) {
+      return ImageType.svg;
+    }
+    // common file URI and local path checks
+    if (lower.startsWith('file://') || lower.startsWith('/')) {
+      return ImageType.file;
+    }
+    // treat asset paths (no scheme) as png by default
+    return ImageType.png;
   }
 }
 

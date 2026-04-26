@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -61,6 +62,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
   List<RecipientModel> _recipients = [];
   List<RecipientModel> _filtered = [];
   bool _isLoading = true;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _usersSub;
 
   @override
   void initState() {
@@ -71,8 +73,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
 
   void _fetchUsersFromFirebase() {
     final currentUser = FirebaseAuth.instance.currentUser;
-
-    FirebaseFirestore.instance
+    _usersSub = FirebaseFirestore.instance
         .collection('users')
         .snapshots()
         .listen((snapshot) {
@@ -85,26 +86,43 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
         final data = doc.data();
         final name = data['name'] ?? 'Unknown User';
         final email = data['email'] ?? 'No Email';
-        
-        liveUsers.add(
-          RecipientModel(
-            id: doc.id, // UID asli dari Firebase
-            name: name,
-            accountNumber: email, // Kita pinjam field email buat nampilin di bawah nama
-            bank: 'NeoPay',
-            currency: 'IDR',
-            // Bikin avatar otomatis dari inisial nama kalau belum ada foto
-            imageUrl: data['photoUrl'] ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=3B82F6&color=fff',
-            semanticLabel: 'Profile of $name',
-            isAiSuggested: false, 
-          ),
-        );
+
+        liveUsers.add(RecipientModel(
+          id: doc.id, // UID asli dari Firebase
+          name: name,
+          accountNumber: email, // Kita pinjam field email buat nampilin di bawah nama
+          bank: 'NeoPay',
+          currency: 'IDR',
+          // Bikin avatar otomatis dari inisial nama kalau belum ada foto
+          imageUrl: data['photoUrl'] ??
+              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=3B82F6&color=fff',
+          semanticLabel: 'Profile of $name',
+          isAiSuggested: false,
+        ));
       }
 
+      if (!mounted) return;
+
+        final query = _searchController.text.toLowerCase();
+        final List<RecipientModel> filtered = query.isEmpty
+          ? List<RecipientModel>.from(liveUsers)
+          : liveUsers
+            .where((r) =>
+              r.name.toLowerCase().contains(query) ||
+              r.accountNumber.toLowerCase().contains(query))
+            .toList();
+
+      setState(() {
+        _recipients = liveUsers;
+        _filtered = filtered;
+        _isLoading = false;
+      });
+    }, onError: (error) {
+      debugPrint('Error listening to users collection: $error');
       if (mounted) {
         setState(() {
-          _recipients = liveUsers;
-          _onSearch(); // Jalankan filter biar list-nya terupdate
+          _recipients = [];
+          _filtered = [];
           _isLoading = false;
         });
       }
@@ -115,7 +133,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filtered = query.isEmpty
-          ? List.from(_recipients)
+          ? List<RecipientModel>.from(_recipients)
           : _recipients
               .where(
                 (r) =>
@@ -128,6 +146,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
 
   @override
   void dispose() {
+    _usersSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
