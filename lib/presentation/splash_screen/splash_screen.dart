@@ -7,14 +7,22 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  Timer? _timer;
   @override
   void initState() {
     super.initState();
     // Delay 3 detik biar user sempet lihat desainnya
-    Timer(const Duration(seconds: 3), () {
+    _timer = Timer(const Duration(seconds: 3), () {
       // Pastikan route '/onboarding' atau '/login' ini sudah ada di main.dart kamu
-      Navigator.pushReplacementNamed(context, '/onboarding-screen'); 
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/onboarding-screen');
     });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override
