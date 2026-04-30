@@ -22,7 +22,9 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
     } else if (decoded is Map) {
       if (decoded['items'] is List) {
         list = decoded['items'] as List<dynamic>;
-        lastUpdated = decoded['lastUpdated'] is int ? decoded['lastUpdated'] as int : 0;
+        lastUpdated = decoded['lastUpdated'] is int
+            ? decoded['lastUpdated'] as int
+            : 0;
       }
     }
 
@@ -32,15 +34,23 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
   }
 
   @override
-  Future<TransactionsFetchResult> fetchPage({required int pageSize, dynamic cursor}) async {
+  Future<TransactionsFetchResult> fetchPage({
+    required int pageSize,
+    dynamic cursor,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getString(_cacheKey);
-    if (cached == null || cached.isEmpty) return TransactionsFetchResult(items: [], hasMore: false);
+    if (cached == null || cached.isEmpty)
+      return TransactionsFetchResult(items: [], hasMore: false);
 
     final decoded = json.decode(cached);
     final items = _fromPayload(decoded);
     final page = items.take(pageSize).toList();
-    return TransactionsFetchResult(items: page, hasMore: items.length > page.length, cursor: null);
+    return TransactionsFetchResult(
+      items: page,
+      hasMore: items.length > page.length,
+      cursor: null,
+    );
   }
 
   @override
@@ -62,7 +72,9 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
   }
 
   @override
-  Future<void> saveCachedTransactions(List<TransactionModel> transactions) async {
+  Future<void> saveCachedTransactions(
+    List<TransactionModel> transactions,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = transactions.map((m) => m.toJson()).toList();

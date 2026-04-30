@@ -212,7 +212,7 @@ class ProfileViewModel extends ProfileViewModelBase {
   }
 
   /// Upload profile photo to Firebase Storage and update Firestore
-  /// 
+  ///
   /// Includes server-side validation, retry logic, and detailed error handling.
   /// Returns true on success, false on failure.
   @override
@@ -237,7 +237,9 @@ class ProfileViewModel extends ProfileViewModelBase {
 
     while (retryCount < maxRetries) {
       try {
-        final ref = _storage.ref().child('users/${_user!.uid}/profile_photo.jpg');
+        final ref = _storage.ref().child(
+          'users/${_user!.uid}/profile_photo.jpg',
+        );
 
         _currentUploadTask = ref.putFile(
           imageFile,
@@ -265,10 +267,9 @@ class ProfileViewModel extends ProfileViewModelBase {
         }
 
         // Validate Firestore update response
-        await _firestore.collection('users').doc(_user!.uid).set(
-          {'photoURL': downloadUrl},
-          SetOptions(merge: true),
-        );
+        await _firestore.collection('users').doc(_user!.uid).set({
+          'photoURL': downloadUrl,
+        }, SetOptions(merge: true));
 
         // Also update FirebaseAuth
         await _user!.updatePhotoURL(downloadUrl);
@@ -332,7 +333,7 @@ class ProfileViewModel extends ProfileViewModelBase {
   }
 
   /// Cancel ongoing upload and cleanup resources
-  /// 
+  ///
   /// Safely cancels the upload task and resets progress state.
   @override
   Future<void> cancelUpload() async {
@@ -351,7 +352,7 @@ class ProfileViewModel extends ProfileViewModelBase {
   }
 
   /// Update profile name and email with reauthentication support
-  /// 
+  ///
   /// If email changes, requires password-based reauthentication and sends
   /// verification email. Returns true if successful.
   @override
@@ -376,7 +377,7 @@ class ProfileViewModel extends ProfileViewModelBase {
           if (currentPassword == null || currentPassword.isEmpty) {
             return false; // Password required for email change
           }
-          
+
           try {
             final cred = EmailAuthProvider.credential(
               email: _email!,
@@ -518,7 +519,7 @@ class ProfileViewModel extends ProfileViewModelBase {
   }
 
   /// Change password with reauthentication (for email/password users)
-  /// 
+  ///
   /// Validates current password before allowing new password set.
   /// Returns false if user is not email/password authenticated or password is wrong.
   @override
