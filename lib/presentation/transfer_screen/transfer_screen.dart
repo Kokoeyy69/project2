@@ -63,7 +63,6 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
-    final transferViewModel = context.watch<TransferViewModel>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F14),
@@ -177,7 +176,7 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
     );
   }
 
-Widget _buildPhoneLayout() {
+  Widget _buildPhoneLayout() {
     final transferViewModel = context.watch<TransferViewModel>();
     return Column(
       children: [
@@ -189,11 +188,9 @@ Widget _buildPhoneLayout() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Input Nominal
-                AmountInputWidget(
-                  selectedWalletIndex: _selectedWalletIndex,
-                ),
+                AmountInputWidget(selectedWalletIndex: _selectedWalletIndex),
                 const SizedBox(height: 24),
-                
+
                 // 2. Daftar Kontak Cepat Horizontal (Avatar Bulat)
                 Text(
                   'Recent Transfers',
@@ -209,34 +206,34 @@ Widget _buildPhoneLayout() {
                   onContactSelected: _onRecipientSelected,
                 ),
                 const SizedBox(height: 24),
-                
+
                 // 3. Daftar Kontak Lengkap Vertikal + Search
                 RecipientSelectorWidget(
                   selectedId: _selectedRecipientId,
                   onSelected: _onRecipientSelected,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // 4. Pemilih Dompet Sumber
                 SourceWalletSelectorWidget(
                   selectedIndex: _selectedWalletIndex,
                   onSelected: _onWalletSelected,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // 5. AI Suggestion Strip
                 AiSuggestionStripWidget(
                   selectedWalletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // 6. Rincian Biaya
                 TransferFeeBreakdownWidget(
                   amount: transferViewModel.numericAmount,
                   selectedWalletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 20),
-                
+
                 // 7. Tombol Konfirmasi
                 ConfirmTransferButtonWidget(
                   amount: transferViewModel.numericAmount,
@@ -300,9 +297,7 @@ Widget _buildPhoneLayout() {
             padding: const EdgeInsets.fromLTRB(10, 8, 20, 100),
             child: Column(
               children: [
-                AmountInputWidget(
-                  selectedWalletIndex: _selectedWalletIndex,
-                ),
+                AmountInputWidget(selectedWalletIndex: _selectedWalletIndex),
                 const SizedBox(height: 16),
                 AiSuggestionStripWidget(
                   selectedWalletIndex: _selectedWalletIndex,

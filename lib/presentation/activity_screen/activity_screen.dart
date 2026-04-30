@@ -32,8 +32,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   // Weekly spending data (Mon-Sun)
   // Weekly spending data (Mon-Sun)
-  List<double> _weeklySpending = List.filled(7, 0.0); // Diisi 0 semua dari Senin-Minggu
-  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  List<double> _weeklySpending = List.filled(
+    7,
+    0.0,
+  ); // Diisi 0 semua dari Senin-Minggu
+  final List<String> _weekDays = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
 
   // Category breakdown & Summary
   List<_CategoryData> _categories = [];
@@ -59,104 +70,134 @@ class _ActivityScreenState extends State<ActivityScreen> {
         .where('userId', isEqualTo: user.uid)
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .listen((snapshot) {
-      
-      final List<Map<String, dynamic>> liveData = [];
-      
-      // Variabel penampung hitungan sementara
-      double tempIncome = 0.0;
-      double tempExpense = 0.0;
-      List<double> tempWeekly = List.filled(7, 0.0);
-      Map<String, double> catTotals = {};
-      double totalCatExpense = 0.0;
+        .listen(
+          (snapshot) {
+            final List<Map<String, dynamic>> liveData = [];
 
-      // Cari rentang tanggal minggu ini (Senin - Minggu)
-      DateTime now = DateTime.now();
-      int currentWeekday = now.weekday; 
-      DateTime startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: currentWeekday - 1));
-      DateTime endOfWeek = startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+            // Variabel penampung hitungan sementara
+            double tempIncome = 0.0;
+            double tempExpense = 0.0;
+            List<double> tempWeekly = List.filled(7, 0.0);
+            Map<String, double> catTotals = {};
+            double totalCatExpense = 0.0;
 
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
-        final currency = data['currency'] ?? 'IDR';
-        
-        final isExpense = data['type'] == 'transfer_out'; 
-        final category = isExpense ? 'Transfer' : 'Shopping'; 
-        
-        String amountStr = amountVal.toStringAsFixed(0).replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
+            // Cari rentang tanggal minggu ini (Senin - Minggu)
+            DateTime now = DateTime.now();
+            int currentWeekday = now.weekday;
+            DateTime startOfWeek = DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(Duration(days: currentWeekday - 1));
+            DateTime endOfWeek = startOfWeek.add(
+              const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
+            );
+
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
+              final currency = data['currency'] ?? 'IDR';
+
+              final isExpense = data['type'] == 'transfer_out';
+              final category = isExpense ? 'Transfer' : 'Shopping';
+
+              String amountStr = amountVal
+                  .toStringAsFixed(0)
+                  .replaceAllMapped(
+                    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                    (m) => '${m[1]}.',
+                  );
+              String prefix = currency == 'USD'
+                  ? '\$'
+                  : (currency == 'CNY' ? '¥ ' : 'Rp ');
+
+              Timestamp? ts = data['timestamp'] as Timestamp?;
+              DateTime dt = ts != null ? ts.toDate() : DateTime.now();
+
+              // --- PROSES HITUNG MATEMATIKA ---
+              if (isExpense) {
+                tempExpense += amountVal;
+                catTotals[category] = (catTotals[category] ?? 0.0) + amountVal;
+                totalCatExpense += amountVal;
+
+                if (dt.isAfter(
+                      startOfWeek.subtract(const Duration(seconds: 1)),
+                    ) &&
+                    dt.isBefore(endOfWeek.add(const Duration(seconds: 1)))) {
+                  int dayIndex = dt.weekday - 1;
+                  tempWeekly[dayIndex] += amountVal;
+                }
+              } else {
+                tempIncome += amountVal;
+              }
+
+              liveData.add({
+                'id': doc.id,
+                'date': DateFormat('MMM d').format(dt),
+                'name': data['recipientName'] ?? 'Unknown Merchant',
+                'category': category,
+                'amount': isExpense
+                    ? '-$prefix$amountStr'
+                    : '+$prefix$amountStr',
+                'amountSign': isExpense ? -1 : 1,
+                'currency': currency,
+                'icon': Icons.swap_horiz_rounded,
+                'color': const Color(0xFF3B82F6),
+                'time': DateFormat('HH:mm').format(dt),
+                'status': data['status'] ?? 'completed',
+              });
+            }
+
+            // Olah persentase Category Breakdown
+            List<_CategoryData> tempCategories = [];
+            List<Color> catColors = [
+              const Color(0xFF8B5CF6),
+              AppTheme.warning,
+              AppTheme.error,
+              const Color(0xFF3B82F6),
+            ];
+            int colorIdx = 0;
+
+            catTotals.forEach((key, value) {
+              int percentage = totalCatExpense > 0
+                  ? ((value / totalCatExpense) * 100).round()
+                  : 0;
+              if (percentage > 0) {
+                tempCategories.add(
+                  _CategoryData(
+                    key,
+                    percentage,
+                    catColors[colorIdx % catColors.length],
+                  ),
+                );
+                colorIdx++;
+              }
+            });
+            tempCategories.sort((a, b) => b.percentage.compareTo(a.percentage));
+
+            if (mounted) {
+              setState(() {
+                _transactions = liveData;
+                _totalIncome = tempIncome;
+                _totalExpense = tempExpense;
+                _weeklySpending = tempWeekly;
+                _categories = tempCategories;
+                _isLoading = false;
+              });
+            }
+          },
+          onError: (error) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+              _showConnectionErrorModal();
+            }
+          },
         );
-        String prefix = currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp ');
-        
-        Timestamp? ts = data['timestamp'] as Timestamp?;
-        DateTime dt = ts != null ? ts.toDate() : DateTime.now();
-        
-        // --- PROSES HITUNG MATEMATIKA ---
-        if (isExpense) {
-          tempExpense += amountVal;
-          catTotals[category] = (catTotals[category] ?? 0.0) + amountVal;
-          totalCatExpense += amountVal;
-
-          if (dt.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) && 
-              dt.isBefore(endOfWeek.add(const Duration(seconds: 1)))) {
-            int dayIndex = dt.weekday - 1; 
-            tempWeekly[dayIndex] += amountVal;
-          }
-        } else {
-          tempIncome += amountVal;
-        }
-
-        liveData.add({
-          'id': doc.id,
-          'date': DateFormat('MMM d').format(dt),
-          'name': data['recipientName'] ?? 'Unknown Merchant',
-          'category': category,
-          'amount': isExpense ? '-$prefix$amountStr' : '+$prefix$amountStr', 
-          'amountSign': isExpense ? -1 : 1,
-          'currency': currency,
-          'icon': Icons.swap_horiz_rounded,
-          'color': const Color(0xFF3B82F6),
-          'time': DateFormat('HH:mm').format(dt),
-          'status': data['status'] ?? 'completed',
-        });
-      }
-
-      // Olah persentase Category Breakdown
-      List<_CategoryData> tempCategories = [];
-      List<Color> catColors = [const Color(0xFF8B5CF6), AppTheme.warning, AppTheme.error, const Color(0xFF3B82F6)];
-      int colorIdx = 0;
-      
-      catTotals.forEach((key, value) {
-        int percentage = totalCatExpense > 0 ? ((value / totalCatExpense) * 100).round() : 0;
-        if (percentage > 0) {
-          tempCategories.add(_CategoryData(key, percentage, catColors[colorIdx % catColors.length]));
-          colorIdx++;
-        }
-      });
-      tempCategories.sort((a, b) => b.percentage.compareTo(a.percentage));
-
-      if (mounted) {
-        setState(() {
-          _transactions = liveData;
-          _totalIncome = tempIncome;
-          _totalExpense = tempExpense;
-          _weeklySpending = tempWeekly;
-          _categories = tempCategories;
-          _isLoading = false;
-        });
-      }
-    }, onError: (error) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
-        _showConnectionErrorModal();
-      }
-    });
   }
+
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
     if (index == 0) {
@@ -375,34 +416,58 @@ class _ActivityScreenState extends State<ActivityScreen> {
           children: [
             _buildAppBar(),
             Expanded(
-              child: _isLoading
-                  ? _buildShimmerState()
-                  : ListView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
-                      children: [
-                        _buildSpendingAnalysis(),
-                        _buildSummaryRow(),
-                        _buildFilterChips(),
-                        const SizedBox(height: 8),
-                        if (_filteredTransactions.isEmpty)
-                          _buildEmptyState()
-                        else
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Column(
-                              children: [
-                                for (final date in _groupedDates) ...[
-                                  _buildDateSeparator(date),
-                                  ..._filteredTransactions
-                                      .where((t) => t['date'] == date)
-                                      .map((t) => _buildTransactionCard(t)),
-                                ],
-                              ],
+              child: Builder(
+                builder: (context) {
+                  if (_isLoading) return _buildShimmerState();
+                  if (_hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Failed to load activity',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.textSecondary,
                             ),
                           ),
-                      ],
-                    ),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: _fetchFirebaseTransactions,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
+                    children: [
+                      _buildSpendingAnalysis(),
+                      _buildSummaryRow(),
+                      _buildFilterChips(),
+                      const SizedBox(height: 8),
+                      if (_filteredTransactions.isEmpty)
+                        _buildEmptyState()
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            children: [
+                              for (final date in _groupedDates) ...[
+                                _buildDateSeparator(date),
+                                ..._filteredTransactions
+                                    .where((t) => t['date'] == date)
+                                    .map((t) => _buildTransactionCard(t)),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -796,7 +861,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // ── Summary Row ───────────────────────────────────────────────────────────
 
   Widget _buildSummaryRow() {
-    final NumberFormat currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final NumberFormat currencyFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Row(
@@ -861,9 +930,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         fontSize: 11,
                         color: AppTheme.textMuted,
                         fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  FittedBox(
+                    FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -873,9 +942,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           fontWeight: FontWeight.w700,
                           color: color,
                         ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
                 ),
               ),
             ],

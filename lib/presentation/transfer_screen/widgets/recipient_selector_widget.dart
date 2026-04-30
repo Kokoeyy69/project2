@@ -63,6 +63,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
   List<RecipientModel> _filtered = [];
   bool _isLoading = true;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _usersSub;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -76,77 +77,93 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
     _usersSub = FirebaseFirestore.instance
         .collection('users')
         .snapshots()
-        .listen((snapshot) {
-      final List<RecipientModel> liveUsers = [];
+        .listen(
+          (snapshot) {
+            final List<RecipientModel> liveUsers = [];
 
-      for (var doc in snapshot.docs) {
-        // Jangan tampilkan akun kita sendiri di daftar penerima
-        if (currentUser != null && doc.id == currentUser.uid) continue;
+            for (var doc in snapshot.docs) {
+              // Jangan tampilkan akun kita sendiri di daftar penerima
+              if (currentUser != null && doc.id == currentUser.uid) continue;
 
-        final data = doc.data();
-        final name = data['name'] ?? 'Unknown User';
-        final email = data['email'] ?? 'No Email';
+              final data = doc.data();
+              final name = data['name'] ?? 'Unknown User';
+              final email = data['email'] ?? 'No Email';
 
-        liveUsers.add(RecipientModel(
-          id: doc.id, // UID asli dari Firebase
-          name: name,
-          accountNumber: email, // Kita pinjam field email buat nampilin di bawah nama
-          bank: 'NeoPay',
-          currency: 'IDR',
-          // Bikin avatar otomatis dari inisial nama kalau belum ada foto
-          imageUrl: data['photoUrl'] ??
-              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=3B82F6&color=fff',
-          semanticLabel: 'Profile of $name',
-          isAiSuggested: false,
-        ));
-      }
+              liveUsers.add(
+                RecipientModel(
+                  id: doc.id, // UID asli dari Firebase
+                  name: name,
+                  accountNumber:
+                      email, // Kita pinjam field email buat nampilin di bawah nama
+                  bank: 'NeoPay',
+                  currency: 'IDR',
+                  // Bikin avatar otomatis dari inisial nama kalau belum ada foto
+                  imageUrl:
+                      data['photoUrl'] ??
+                      'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=3B82F6&color=fff',
+                  semanticLabel: 'Profile of $name',
+                  isAiSuggested: false,
+                ),
+              );
+            }
 
-      if (!mounted) return;
+            if (!mounted) return;
 
-        final query = _searchController.text.toLowerCase();
-        final List<RecipientModel> filtered = query.isEmpty
-          ? List<RecipientModel>.from(liveUsers)
-          : liveUsers
-            .where((r) =>
-              r.name.toLowerCase().contains(query) ||
-              r.accountNumber.toLowerCase().contains(query))
-            .toList();
+            final query = _searchController.text.toLowerCase();
+            final List<RecipientModel> filtered = query.isEmpty
+                ? List<RecipientModel>.from(liveUsers)
+                : liveUsers
+                      .where(
+                        (r) =>
+                            r.name.toLowerCase().contains(query) ||
+                            r.accountNumber.toLowerCase().contains(query),
+                      )
+                      .toList();
 
-      setState(() {
-        _recipients = liveUsers;
-        _filtered = filtered;
-        _isLoading = false;
-      });
-    }, onError: (error) {
-      debugPrint('Error listening to users collection: $error');
-      if (mounted) {
-        setState(() {
-          _recipients = [];
-          _filtered = [];
-          _isLoading = false;
-        });
-      }
-    });
+            setState(() {
+              _recipients = liveUsers;
+              _filtered = filtered;
+              _isLoading = false;
+            });
+          },
+          onError: (error) {
+            debugPrint('Error listening to users collection: $error');
+            if (mounted) {
+              setState(() {
+                _recipients = [];
+                _filtered = [];
+                _isLoading = false;
+              });
+            }
+          },
+        );
   }
 
   void _onSearch() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filtered = query.isEmpty
+    // Debounce input to avoid rapid rebuilds while typing
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      final query = _searchController.text.toLowerCase();
+      final filtered = query.isEmpty
           ? List<RecipientModel>.from(_recipients)
           : _recipients
-              .where(
-                (r) =>
-                    r.name.toLowerCase().contains(query) ||
-                    r.accountNumber.toLowerCase().contains(query),
-              )
-              .toList();
+                .where(
+                  (r) =>
+                      r.name.toLowerCase().contains(query) ||
+                      r.accountNumber.toLowerCase().contains(query),
+                )
+                .toList();
+      if (!mounted) return;
+      setState(() {
+        _filtered = filtered;
+      });
     });
   }
 
   @override
   void dispose() {
     _usersSub?.cancel();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -214,7 +231,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
                   ),
                 ),
               ),
-              
+
               // Recipient list atau Loading
               if (_isLoading)
                 const Padding(
