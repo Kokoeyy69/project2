@@ -12,6 +12,8 @@ import '../presentation/transfer_screen/transfer_success_screen.dart';
 import '../presentation/activity_screen/activity_screen.dart';
 import '../presentation/profile_screen/profile_screen.dart';
 import '../presentation/onboarding_screen/onboarding_screen.dart';
+import '../presentation/ai_chat/ai_chat_screen.dart';
+import '../presentation/ai_settings/ai_settings_screen.dart';
 
 class AppRoutes {
   static const String initial = '/';
@@ -23,11 +25,13 @@ class AppRoutes {
   static const String transferSuccessScreen = '/transfer-success-screen';
   static const String activityScreen = '/activity-screen';
   static const String profileScreen = '/profile-screen';
+  static const String aiChatScreen = '/ai-chat';
+  static const String aiSettingsScreen = '/ai-settings';
   static const String onboardingScreen = '/onboarding-screen';
 
   static Map<String, WidgetBuilder> routes = {
     // Sekarang aplikasi buka Splash Screen duluan, bukan Onboarding
-    initial: (context) => SplashScreen(), 
+    initial: (context) => SplashScreen(),
     splashScreen: (context) => SplashScreen(),
     homeScreen: (context) => const HomeScreen(),
     signUpLoginScreen: (context) => const SignUpLoginScreen(),
@@ -36,6 +40,8 @@ class AppRoutes {
     transferSuccessScreen: (context) => const TransferSuccessScreen(),
     activityScreen: (context) => const ActivityScreen(),
     profileScreen: (context) => const ProfileScreen(),
+    aiChatScreen: (context) => const AiChatScreen(),
+    aiSettingsScreen: (context) => const AiSettingsScreen(),
     onboardingScreen: (context) => const OnboardingScreen(),
   };
 
@@ -57,11 +63,15 @@ class AppRoutes {
         return _buildPageRoute(const ActivityScreen(), settings);
       case profileScreen:
         return _buildPageRoute(const ProfileScreen(), settings);
+      case aiChatScreen:
+        return _buildPageRoute(const AiChatScreen(), settings);
+      case aiSettingsScreen:
+        return _buildPageRoute(const AiSettingsScreen(), settings);
       case onboardingScreen:
         return _buildPageRoute(const OnboardingScreen(), settings);
       default:
         // Default-nya juga dikembalikan ke Splash Screen buat keamanan
-        return _buildPageRoute(SplashScreen(), settings); 
+        return _buildPageRoute(SplashScreen(), settings);
     }
   }
 

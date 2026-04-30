@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../theme/app_theme.dart';
 
 class TransferContactListWidget extends StatefulWidget {
@@ -142,10 +143,14 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
                                 ),
                               ),
                               child: ClipOval(
-                                child: Image.network(
-                                  contact['avatar'] as String,
+                                child: CachedNetworkImage(
+                                  imageUrl: contact['avatar'] as String,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  placeholder: (c, s) => Container(
+                                    color: (contact['color'] as Color)
+                                        .withAlpha(30),
+                                  ),
+                                  errorWidget: (c, s, e) => Container(
                                     color: (contact['color'] as Color)
                                         .withAlpha(60),
                                     child: Icon(

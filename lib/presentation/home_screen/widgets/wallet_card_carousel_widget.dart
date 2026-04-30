@@ -69,14 +69,26 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
 
     // Ambil saldo IDR dari Firebase (index ke-0)
     final double idrBalance = (widget.balances![0] as num).toDouble();
-    
+
     // Bikin konversi bohongan buat USD dan CNY biar kartunya gak kosong
     final double usdBalance = idrBalance / 16200; // Asumsi kurs
     final double cnyBalance = idrBalance / 2200;
 
-    final idrFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-    final usdFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$ ', decimalDigits: 2);
-    final cnyFormat = NumberFormat.currency(locale: 'zh_CN', symbol: '¥ ', decimalDigits: 2);
+    final idrFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    final usdFormat = NumberFormat.currency(
+      locale: 'en_US',
+      symbol: '\$ ',
+      decimalDigits: 2,
+    );
+    final cnyFormat = NumberFormat.currency(
+      locale: 'zh_CN',
+      symbol: '¥ ',
+      decimalDigits: 2,
+    );
 
     setState(() {
       _cards = [
@@ -85,7 +97,8 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
           currencySymbol: 'Rp',
           balance: idrFormat.format(idrBalance),
           cardNumber: '•••• •••• •••• 4821',
-          holderName: 'ENRICO TEST', // Sudah kusesuaikan dengan data test Firebase-mu
+          holderName:
+              'ENRICO TEST', // Sudah kusesuaikan dengan data test Firebase-mu
           gradientColors: [const Color(0xFF1E3A5F), const Color(0xFF0D1F3C)],
           glowColor: const Color(0xFF3B82F6),
           flagEmoji: '🇮🇩',
@@ -129,7 +142,10 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
   @override
   Widget build(BuildContext context) {
     if (_cards.isEmpty) {
-      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     return Column(
       children: [
@@ -168,7 +184,9 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
               width: _currentIndex == index ? 20 : 6,
               height: 6,
               decoration: BoxDecoration(
-                color: _currentIndex == index ? _cards[index].glowColor : const Color(0xFF94A3B8),
+                color: _currentIndex == index
+                    ? _cards[index].glowColor
+                    : const Color(0xFF94A3B8),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -197,12 +215,15 @@ class _WalletCardItem extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  card.gradientColors[0].withOpacity(0.9),
-                  card.gradientColors[1].withOpacity(0.95),
+                  card.gradientColors[0].withAlpha((0.9 * 255).round()),
+                  card.gradientColors[1].withAlpha((0.95 * 255).round()),
                 ],
               ),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: card.glowColor.withOpacity(0.35), width: 1),
+              border: Border.all(
+                color: card.glowColor.withAlpha((0.35 * 255).round()),
+                width: 1,
+              ),
             ),
             child: Padding(
               padding: const EdgeInsets.all(22),
@@ -214,23 +235,64 @@ class _WalletCardItem extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text(card.flagEmoji, style: const TextStyle(fontSize: 18)),
+                          Text(
+                            card.flagEmoji,
+                            style: const TextStyle(fontSize: 18),
+                          ),
                           const SizedBox(width: 8),
-                          Text(card.currency, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                          Text(
+                            card.currency,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                         ],
                       ),
-                      const Icon(Icons.contactless_rounded, size: 20, color: Colors.white54),
+                      const Icon(
+                        Icons.contactless_rounded,
+                        size: 20,
+                        color: Colors.white54,
+                      ),
                     ],
                   ),
                   const Spacer(),
-                  Text(card.currencySymbol, style: GoogleFonts.inter(fontSize: 16, color: Colors.white70)),
-                  Text(card.balance, style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text(
+                    card.currencySymbol,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  Text(
+                    card.balance,
+                    style: GoogleFonts.inter(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                   const Spacer(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(card.cardNumber, style: GoogleFonts.inter(fontSize: 12, color: Colors.white38, letterSpacing: 1.2)),
-                      Text(card.holderName, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white54)),
+                      Text(
+                        card.cardNumber,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white38,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      Text(
+                        card.holderName,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white54,
+                        ),
+                      ),
                     ],
                   ),
                 ],

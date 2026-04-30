@@ -1,10 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/material.dart';
-
 import '../core/app_export.dart';
+import '../services/analytics_service.dart';
+import '../services/firebase_analytics_provider.dart';
 import '../widgets/custom_error_widget.dart';
-import 'routes/app_routes.dart';
+// Note: AppRoutes is re-exported via app_export.dart
 // Note: Pastikan AppRoutes sudah ter-import di dalam app_export.dart
 // Kalau error merah di AppRoutes, tambahkan manual: import '../routes/app_routes.dart';
 
@@ -12,6 +12,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+
+  // Initialize Firebase Analytics provider
+  AnalyticsService.instance.setProvider(FirebaseAnalyticsProvider());
 
   bool hasShownError = false;
 
@@ -49,10 +52,10 @@ class MyApp extends StatelessWidget {
           title: 'NeoPay AI',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          
+
           // UBAH INI: Paksa aplikasi pakai Dark Mode biar tema Midnight Premium-nya nyala!
-          themeMode: ThemeMode.dark, 
-          
+          themeMode: ThemeMode.dark,
+
           // 🚨 CRITICAL: NEVER REMOVE OR MODIFY
           builder: (context, child) {
             return MediaQuery(
@@ -62,16 +65,15 @@ class MyApp extends StatelessWidget {
               child: child!,
             );
           },
+
           // 🚨 END CRITICAL SECTION
-          
           debugShowCheckedModeBanner: false, // Pita debug dihilangkan
-          
           // SAMBUNGAN RUTE NAVIGASI
           routes: AppRoutes.routes,
           initialRoute: AppRoutes.initial,
-          
+
           // TAMBAHAN: Biar fallback rute (kalau ada error salah panggil halaman) larinya ke Splash Screen
-          onGenerateRoute: AppRoutes.onGenerateRoute, 
+          onGenerateRoute: AppRoutes.onGenerateRoute,
         );
       },
     );

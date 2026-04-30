@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
   @override
-  _SplashScreenState createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
@@ -35,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF0F172A), Color(0xFF020617)], 
+            colors: [Color(0xFF0F172A), Color(0xFF020617)],
           ),
         ),
         child: Column(
@@ -46,20 +48,20 @@ class _SplashScreenState extends State<SplashScreen> {
               decoration: BoxDecoration(
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withOpacity(0.3),
+                    color: Color(0xFF10B981).withAlpha((0.3 * 255).round()),
                     blurRadius: 40,
                     spreadRadius: 10,
                   ),
                 ],
               ),
               child: const Icon(
-                Icons.auto_awesome, 
-                size: 80, 
-                color: Color(0xFF10B981)
+                Icons.auto_awesome,
+                size: 80,
+                color: Color(0xFF10B981),
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Teks Judul
             const Text(
               "NeoPay AI",
@@ -71,7 +73,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // Slogan
             const Text(
               "Smart Future Finance",
@@ -82,7 +84,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 48),
-            
+
             // Loading Indicator Minimalis
             const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),

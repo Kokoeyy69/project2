@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
 import '../../routes/app_routes.dart';
 import '../../widgets/app_navigation.dart';
+import '../../viewmodels/home_view_model.dart';
 import './widgets/ai_command_bar_widget.dart';
 import './widgets/home_header_widget.dart';
 import './widgets/quick_actions_grid_widget.dart';
@@ -20,19 +20,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentNavIndex = 0;
   int _currentCardIndex = 0;
-  Stream<DocumentSnapshot>? _balanceStream;
+
+  late final HomeViewModel _vm;
 
   @override
   void initState() {
     super.initState();
-    // KITA KUNCI KONEKSINYA DI SINI BIAR GAK RESET TERUS
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _balanceStream = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .snapshots();
-    }
+    _vm = HomeViewModel();
+    _vm.start();
   }
 
   void _onNavTap(int index) {
@@ -51,65 +46,65 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void dispose() {
+    _vm.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F14),
       extendBody: true,
       body: SafeArea(
         bottom: false,
-        child: StreamBuilder<DocumentSnapshot>(
-          // PANGGIL VARIABEL YANG UDAH DIKUNCI TADI
-          stream: _balanceStream, 
-          builder: (context, snapshot) {
-            
-            // Loading cuma jalan sekali di awal
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: Colors.purple));
-            }
-
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-            }
-
-            final data = snapshot.data?.data() as Map<String, dynamic>?;
-
-            if (data == null) {
-              return const Center(
-                child: Text("Data tidak ditemukan di Firestore!", 
-                style: TextStyle(color: Colors.white))
-              );
-            }
-
-            // Data berhasil ditarik dan UI dirender
-            final balanceValue = data['balance'] ?? 0;
-            final balances = [balanceValue];
-
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: HomeHeaderWidget(currentCardIndex: _currentCardIndex),
-                ),
-                SliverToBoxAdapter(
-                  child: WalletCardCarouselWidget(
-                    balances: balances,
-                    onCardChanged: _onCardChanged,
+        child: ChangeNotifierProvider<HomeViewModel>.value(
+          value: _vm,
+          child: Consumer<HomeViewModel>(
+            builder: (context, vm, _) {
+              if (vm.isLoading)
+                return const Center(child: CircularProgressIndicator());
+              if (vm.hasError)
+                return Center(
+                  child: Text(
+                    'Error: ${vm.error}',
+                    style: const TextStyle(color: Colors.white),
                   ),
-                ),
-                const SliverToBoxAdapter(child: AiCommandBarWidget()),
-                SliverToBoxAdapter(
-                  child: QuickActionsGridWidget(
-                    onTransferTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.transferKeypadScreen,
+                );
+              final balances = [vm.balance];
+
+              return RefreshIndicator(
+                onRefresh: vm.refresh,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: HomeHeaderWidget(
+                        currentCardIndex: _currentCardIndex,
+                      ),
                     ),
-                  ),
+                    SliverToBoxAdapter(
+                      child: WalletCardCarouselWidget(
+                        balances: balances,
+                        onCardChanged: _onCardChanged,
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: AiCommandBarWidget()),
+                    SliverToBoxAdapter(
+                      child: QuickActionsGridWidget(
+                        onTransferTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.transferKeypadScreen,
+                        ),
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: RecentTransactionsWidget()),
+                    const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                  ],
                 ),
-                const SliverToBoxAdapter(child: RecentTransactionsWidget()),
-                const SliverToBoxAdapter(child: SizedBox(height: 96)),
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
       bottomNavigationBar: AppNavigation(

@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -237,7 +239,7 @@ class _ConfirmTransferButtonWidgetState
                       onPressed: () async {
                         Navigator.pop(context);
                         setState(() => _isLoading = true);
-                        
+
                         // --- KODE FIREBASE UNTUK TRANSFER ASLI ---
                         // --- KODE FIREBASE UNTUK TRANSFER ASLI & POTONG SALDO ---
                         try {
@@ -245,18 +247,27 @@ class _ConfirmTransferButtonWidgetState
                           if (user != null) {
                             final db = FirebaseFirestore.instance;
                             // Referensi ke dokumen user dan dokumen transaksi baru
-                            final userRef = db.collection('users').doc(user.uid);
-                            final newTxRef = db.collection('transactions').doc(); 
+                            final userRef = db
+                                .collection('users')
+                                .doc(user.uid);
+                            final newTxRef = db
+                                .collection('transactions')
+                                .doc();
 
                             // Jalankan Firestore Transaction (All-or-Nothing)
                             await db.runTransaction((transaction) async {
                               // 1. Baca data user saat ini
-                              final userSnapshot = await transaction.get(userRef);
+                              final userSnapshot = await transaction.get(
+                                userRef,
+                              );
                               if (!userSnapshot.exists) {
                                 throw Exception("User_Not_Found");
                               }
 
-                              final currentBalance = (userSnapshot.data()?['balance'] as num?)?.toDouble() ?? 0.0;
+                              final currentBalance =
+                                  (userSnapshot.data()?['balance'] as num?)
+                                      ?.toDouble() ??
+                                  0.0;
 
                               // 2. Validasi: Saldo cukup nggak?
                               if (currentBalance < widget.amount) {
@@ -271,7 +282,7 @@ class _ConfirmTransferButtonWidgetState
                               // 4. Catat riwayat di tabel transactions
                               transaction.set(newTxRef, {
                                 'userId': user.uid,
-                                'recipientName': widget.recipientId, 
+                                'recipientName': widget.recipientId,
                                 'amount': widget.amount,
                                 'currency': currency,
                                 'type': 'transfer_out',
@@ -283,21 +294,25 @@ class _ConfirmTransferButtonWidgetState
                         } catch (e) {
                           debugPrint("Gagal transfer: $e");
                           if (!mounted) return;
-                          
+
                           // Matikan loading animasi muter-muter
                           setState(() => _isLoading = false);
-                          
+
                           // Munculkan notifikasi error ke user pakai SnackBar
-                          String errorMsg = 'Transfer failed. Please try again.';
+                          String errorMsg =
+                              'Transfer failed. Please try again.';
                           if (e.toString().contains('Insufficient_Balance')) {
                             errorMsg = 'Saldo kamu tidak cukup, Bos!';
                           }
-                          
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
                                 errorMsg,
-                                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               backgroundColor: AppTheme.error,
                               behavior: SnackBarBehavior.floating,
@@ -424,4 +439,3 @@ class _ConfirmTransferButtonWidgetState
     );
   }
 }
-

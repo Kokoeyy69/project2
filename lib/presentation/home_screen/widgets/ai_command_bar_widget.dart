@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/app_theme.dart';
+import 'package:neopay_ai/routes/app_routes.dart';
 
 class AiCommandBarWidget extends StatefulWidget {
   const AiCommandBarWidget({super.key});
@@ -72,7 +73,7 @@ class _AiCommandBarWidgetState extends State<AiCommandBarWidget>
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: GestureDetector(
             onTap: () {
-              // TODO: Navigate to AI chat screen
+              Navigator.pushNamed(context, AppRoutes.aiChatScreen);
             },
             child: Container(
               height: 60,
@@ -205,7 +206,7 @@ class _WaveIconPainter extends CustomPainter {
       final barHeight = 4.0 + heightFactor * (size.height * 0.55 - 4.0);
       final opacity = 0.4 + heightFactor * 0.6;
 
-      paint.color = color.withOpacity(opacity);
+      paint.color = color.withAlpha((opacity * 255).round());
 
       final x = i * barWidth * 2 + barWidth / 2;
       canvas.drawLine(
