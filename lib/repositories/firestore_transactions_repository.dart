@@ -25,11 +25,11 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     SharedPreferences? prefs,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance,
-        _prefs = prefs != null
-            ? Future.value(prefs)
-            : SharedPreferences.getInstance();
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _auth = auth ?? FirebaseAuth.instance,
+       _prefs = prefs != null
+           ? Future.value(prefs)
+           : SharedPreferences.getInstance();
 
   String _getTimeAgo(Timestamp? timestamp) {
     if (timestamp == null) return 'Just now';
@@ -131,10 +131,10 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
         .snapshots()
         .where((snap) => snap.docs.isNotEmpty)
         .map((snap) {
-      final doc = snap.docs.first;
-      final data = doc.data() as Map<String, dynamic>;
-      return _buildTransactionModel(doc.id, data);
-    });
+          final doc = snap.docs.first;
+          final data = doc.data() as Map<String, dynamic>;
+          return _buildTransactionModel(doc.id, data);
+        });
   }
 
   @override
@@ -155,8 +155,9 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
       } else if (decoded is Map) {
         if (decoded['items'] is List) {
           list = decoded['items'] as List<dynamic>;
-          lastUpdated =
-              decoded['lastUpdated'] is int ? decoded['lastUpdated'] as int : 0;
+          lastUpdated = decoded['lastUpdated'] is int
+              ? decoded['lastUpdated'] as int
+              : 0;
         }
       }
 
@@ -186,8 +187,10 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
   ) async {
     try {
       final prefs = await _prefs;
-      final list =
-          transactions.take(_cacheMaxItems).map((m) => m.toJson()).toList();
+      final list = transactions
+          .take(_cacheMaxItems)
+          .map((m) => m.toJson())
+          .toList();
       final payload = {
         'items': list,
         'lastUpdated': DateTime.now().millisecondsSinceEpoch,

@@ -9,7 +9,7 @@ class FirebaseAnalyticsProvider implements AnalyticsProvider {
   final FirebaseAnalytics _analytics;
 
   FirebaseAnalyticsProvider({FirebaseAnalytics? analytics})
-      : _analytics = analytics ?? FirebaseAnalytics.instance;
+    : _analytics = analytics ?? FirebaseAnalytics.instance;
 
   @override
   Future<void> logEvent(String name, {Map<String, Object?>? params}) async {

@@ -340,7 +340,10 @@ class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
     final hasRepository = widget.repository != null;
     final hasUser = widget.disableNetwork
         ? true
-        : (hasRepository ? true : (FirebaseAuth.instance.currentUser != null || _items.isNotEmpty));
+        : (hasRepository
+              ? true
+              : (FirebaseAuth.instance.currentUser != null ||
+                    _items.isNotEmpty));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
