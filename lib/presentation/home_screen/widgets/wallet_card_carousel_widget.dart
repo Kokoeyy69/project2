@@ -64,15 +64,15 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
   }
 
   void _buildCards() {
-    // REVISI: Ganti syaratnya, asal data nggak kosong aja dia jalan
     if (widget.balances == null || widget.balances!.isEmpty) return;
 
-    // Ambil saldo IDR dari Firebase (index ke-0)
     final double idrBalance = (widget.balances![0] as num).toDouble();
-
-    // Bikin konversi bohongan buat USD dan CNY biar kartunya gak kosong
-    final double usdBalance = idrBalance / 16200; // Asumsi kurs
-    final double cnyBalance = idrBalance / 2200;
+    final double usdBalance = (widget.balances!.length > 1) 
+        ? (widget.balances![1] as num).toDouble() 
+        : idrBalance / 16200;
+    final double cnyBalance = (widget.balances!.length > 2) 
+        ? (widget.balances![2] as num).toDouble() 
+        : idrBalance / 2200;
 
     final idrFormat = NumberFormat.currency(
       locale: 'id_ID',

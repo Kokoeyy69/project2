@@ -226,47 +226,6 @@ class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
     _topRealtimeSub = _topRealtimeSub;
   }
 
-  String _getTimeAgo(dynamic timestamp) {
-    if (timestamp == null) return 'Just now';
-    DateTime dt;
-    if (timestamp is DateTime) {
-      dt = timestamp;
-    } else if (timestamp is int) {
-      dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    } else if (timestamp is String) {
-      return timestamp;
-    } else if (timestamp is Map && timestamp['seconds'] != null) {
-      final seconds = timestamp['seconds'] as int?;
-      if (seconds != null) {
-        dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
-      } else {
-        return 'Just now';
-      }
-    } else {
-      return 'Just now';
-    }
-
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
-  String _formatAmount(num? amountNum, String? currency) {
-    final amountVal = (amountNum ?? 0).toDouble();
-    String amountStr = amountVal
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-        );
-    String prefix = currency == 'USD'
-        ? '\$'
-        : (currency == 'CNY' ? '¥ ' : 'Rp ');
-    return '- $prefix$amountStr';
-  }
-
   Future<void> _fetchPage({bool reset = false}) async {
     if (widget.disableNetwork) {
       setState(() {

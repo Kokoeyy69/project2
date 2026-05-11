@@ -44,7 +44,7 @@ class RecipientModel {
 
 class RecipientSelectorWidget extends StatefulWidget {
   final String selectedId;
-  final ValueChanged<String> onSelected;
+  final void Function(String id, String name) onSelected;
 
   const RecipientSelectorWidget({
     super.key,
@@ -82,17 +82,16 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
             final List<RecipientModel> liveUsers = [];
 
             for (var doc in snapshot.docs) {
-              // Jangan tampilkan akun kita sendiri di daftar penerima
-              if (currentUser != null && doc.id == currentUser.uid) continue;
-
               final data = doc.data();
               final name = data['name'] ?? 'Unknown User';
               final email = data['email'] ?? 'No Email';
 
+              final isMe = currentUser != null && doc.id == currentUser.uid;
+
               liveUsers.add(
                 RecipientModel(
                   id: doc.id, // UID asli dari Firebase
-                  name: name,
+                  name: isMe ? '$name (My Account)' : name,
                   accountNumber:
                       email, // Kita pinjam field email buat nampilin di bawah nama
                   bank: 'NeoPay',
@@ -273,7 +272,7 @@ class _RecipientSelectorWidgetState extends State<RecipientSelectorWidget> {
                     return _RecipientTile(
                       recipient: r,
                       isSelected: isSelected,
-                      onTap: () => widget.onSelected(r.id),
+                      onTap: () => widget.onSelected(r.id, r.name),
                     );
                   },
                 ),

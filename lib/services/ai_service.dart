@@ -1,108 +1,78 @@
-import 'dart:async';
-import 'dart:math';
-import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:neopay_ai/core/config/env.dart';
 
-/// Robust AI service wrapper.
-///
-/// Features:
-/// - Reads `ai_api_key` and `ai_provider` from SharedPreferences.
-/// - Supports cancellable requests via `CancelToken`.
-/// - Retries transient errors with exponential backoff.
-/// - Maps common network errors into friendly messages.
 class AiService {
-  final Dio _dio;
+  GenerativeModel? _model;
+  bool _isInitialized = false;
 
-  AiService([Dio? dio]) : _dio = dio ?? Dio();
-
-  Future<String> sendMessage(
-    String prompt, {
-    String model = 'gpt-3.5-turbo',
-    int maxTokens = 800,
-    double temperature = 0.3,
-    CancelToken? cancelToken,
-    int maxRetries = 2,
-    int baseDelayMs = 500,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final apiKey = prefs.getString('ai_api_key') ?? '';
-    final provider = prefs.getString('ai_provider') ?? 'openai';
-
-    if (apiKey.isEmpty) {
-      throw Exception('AI API key not configured. Open AI settings.');
-    }
-
-    if (provider != 'openai') {
-      throw Exception('AI provider $provider not supported yet');
-    }
-
-    int attempt = 0;
-    while (true) {
-      try {
-        final payload = {
-          'model': model,
-          'messages': [
-            {'role': 'user', 'content': prompt},
-          ],
-          'max_tokens': maxTokens,
-          'temperature': temperature,
-        };
-
-        final resp = await _dio.post(
-          'https://api.openai.com/v1/chat/completions',
-          data: payload,
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            },
-            sendTimeout: const Duration(seconds: 20),
-            receiveTimeout: const Duration(seconds: 20),
-          ),
-          cancelToken: cancelToken,
-        );
-
-        if (resp.statusCode == 200) {
-          final data = resp.data;
-          final text = data['choices']?[0]?['message']?['content'];
-          if (text != null) return text.toString();
-          throw Exception('Unexpected response format from OpenAI');
-        }
-
-        throw Exception(
-          'OpenAI error: ${resp.statusCode} ${resp.statusMessage}',
-        );
-      } on DioException catch (e) {
-        if (e.type == DioExceptionType.cancel) {
-          throw Exception('AI request cancelled');
-        }
-
-        // Treat timeouts and connection errors as transient and retryable
-        final transient =
-            e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.receiveTimeout ||
-            e.type == DioExceptionType.connectionError;
-
-        if (!transient) rethrow;
-
-        if (attempt >= maxRetries) {
-          throw Exception('AI request failed after retries: ${e.message}');
-        }
-
-        // Exponential backoff with jitter
-        final delay = _computeBackoff(attempt, baseDelayMs);
-        await Future.delayed(Duration(milliseconds: delay));
-        attempt++;
-        continue;
-      } catch (e) {
-        rethrow;
-      }
-    }
+  // 1. HYBRID DETECTION (Cloud vs On-Device fallback)
+  Future<bool> _isDeviceCapableForLocalAI() async {
+    // Default to false (Cloud) for now. Future: check RAM/NPU.
+    return false;
   }
 
-  int _computeBackoff(int attempt, int baseMs) {
-    final pow2 = pow(2, attempt).toInt();
-    final jitter = Random().nextInt(baseMs);
-    return baseMs * pow2 + jitter;
+  Future<void> _ensureInitialized() async {
+    if (_isInitialized) return;
+    
+    final apiKey = Env.geminiApiKey;
+    final isLocalCapable = await _isDeviceCapableForLocalAI();
+    
+    // Use Nano if local is capable, otherwise use Flash
+    final modelName = isLocalCapable ? 'gemini-nano' : 'gemini-flash-latest';
+    print('[AiService] Using architecture: $modelName');
+
+    // 2. JSON MODE & FINTECH PERSONA
+    _model = GenerativeModel(
+      model: modelName,
+      apiKey: apiKey,
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+        temperature: 0.1, // Highly deterministic
+      ),
+      systemInstruction: Content.system('''
+        You are NeoPay AI, a secure financial assistant.
+        ALWAYS respond in valid JSON format ONLY. No markdown, no extra text.
+        Schema:
+        {
+          "reply": "Your natural conversational response to the user.",
+          "action": "none" | "transfer",
+          "transfer_details": {
+            "amount": 0,
+            "recipient": "string"
+          }
+        }
+        Use the injected [SYSTEM CONTEXT] to answer questions about balances.
+        If user asks to send/transfer money, set action to "transfer" and parse the amount and recipient. Otherwise, action is "none".
+      '''),
+    );
+    _isInitialized = true;
+  }
+
+  // 3. CONTEXT INJECTION & JSON PARSING
+  Future<Map<String, dynamic>> sendAgentMessage(String prompt, {String? financialContext}) async {
+    await _ensureInitialized();
+
+    String finalPrompt = prompt;
+    if (financialContext != null && financialContext.isNotEmpty) {
+      finalPrompt = "[SYSTEM CONTEXT: $financialContext]\n\nUser says: $prompt";
+    }
+
+    try {
+      final response = await _model!.generateContent([Content.text(finalPrompt)]);
+      if (response.text != null) {
+        // Clean JSON just in case Gemini hallucinates markdown formatting
+        String cleanJson = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
+        return jsonDecode(cleanJson);
+      }
+      throw Exception('Empty response from AI');
+    } catch (e) {
+      print('[AiService] Agent Error: $e');
+      return {
+        "reply": "Maaf, terjadi kesalahan pada sistem AI.",
+        "action": "none",
+        "transfer_details": {"amount": 0, "recipient": ""}
+      };
+    }
   }
 }

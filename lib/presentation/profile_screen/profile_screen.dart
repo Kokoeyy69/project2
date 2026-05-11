@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:neopay_ai/core/services/security_service.dart';
 import 'package:neopay_ai/services/analytics_service.dart';
 import 'package:neopay_ai/utils/permission_helper.dart';
 import '../../theme/app_theme.dart';
@@ -456,8 +457,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           subtitle: 'Use fingerprint or Face ID',
           value: _vm.biometricEnabled,
           onChanged: (val) async {
-            final ok = await _vm.setBiometricEnabled(val);
-            if (!ok) _showSnack('Failed to update biometric setting', true);
+            // Unconditionally save the preference - no hardware checks
+            await SecurityService.instance.setBiometricEnabled(val);
+            if (mounted) setState(() {}); // Refresh UI to reflect change
           },
         ),
         _buildDivider(),
@@ -608,14 +610,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final uri = Uri.parse('https://your-support.example.com');
             if (await canLaunchUrl(uri)) await launchUrl(uri);
           },
-        ),
-        _buildDivider(),
-        _buildNavTile(
-          icon: Icons.assistant_rounded,
-          iconColor: AppTheme.primary,
-          title: 'AI Settings',
-          subtitle: 'Configure AI API key and provider',
-          onTap: () => Navigator.pushNamed(context, AppRoutes.aiSettingsScreen),
         ),
         _buildDivider(),
         _buildNavTile(

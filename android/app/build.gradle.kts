@@ -16,6 +16,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Enable core library desugaring for Java 8+ language features used by some dependencies
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -23,14 +25,32 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.project2"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Enable multidex to avoid method limit crashes for certain dependency combinations
+        multiDexEnabled = true
+    }
+
+    // Flutter Flavors Configuration
+    flavorDimensions += "default"
+    productFlavors {
+        create("dev") {
+            dimension = "default"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "NeoPay AI Dev")
+        }
+        create("staging") {
+            dimension = "default"
+            applicationIdSuffix = ".staging"
+            resValue("string", "app_name", "NeoPay AI Staging")
+        }
+        create("prod") {
+            dimension = "default"
+            resValue("string", "app_name", "NeoPay AI")
+        }
     }
 
     buildTypes {
@@ -44,4 +64,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Required for core library desugaring (enables modern Java libs on older Android)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

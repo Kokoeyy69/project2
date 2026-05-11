@@ -1,11 +1,15 @@
+// ignore_for_file: use_build_context_synchronously
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
 import '../../routes/app_routes.dart';
+import '../../services/api_service.dart';
+import '../../core/services/security_service.dart';
+import '../security/create_pin_screen.dart';
+import '../security/verify_pin_screen.dart';
 import './widgets/numeric_keypad_widget.dart';
 import './widgets/transfer_contact_list_widget.dart';
 
@@ -20,8 +24,10 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
   int _currentNavIndex = 1;
   String _amount = '';
   String? _selectedContactId;
+  String? _selectedContactName;
   String _selectedCurrency = 'IDR';
   String _targetCurrency = 'USD';
+  bool _isTransferLoading = false; // Debounce: prevents double-spend
 
   final List<String> _currencies = ['IDR', 'USD', 'CNY'];
 
@@ -93,12 +99,14 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
   }
 
   void _onConvertAndSend() {
-    if (_amount.isEmpty || _selectedContactId == null) {
+    if (_isTransferLoading) return; // Debounce guard
+    final val = double.tryParse(_amount) ?? 0;
+    if (val <= 0 || _selectedContactId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _amount.isEmpty
-                ? 'Please enter an amount'
+            val <= 0
+                ? 'Please enter a valid amount'
                 : 'Please select a recipient',
             style: GoogleFonts.inter(color: AppTheme.textPrimary),
           ),
@@ -209,105 +217,143 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
+
+                // Step 1: PIN verification gate
+                final securityService = SecurityService();
+                final hasPin = await securityService.hasTransactionPin();
+
+                // Step 2: Small delay to avoid UI jank after dialog dismissal
+                await Future.delayed(const Duration(milliseconds: 150));
+
+                if (!mounted) return;
+
+                bool pinOk = false;
+                if (!hasPin) {
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CreatePinScreen()),
+                  );
+                  pinOk = result == true;
+                  if (!pinOk && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'PIN harus diatur untuk melakukan transfer',
+                          style: GoogleFonts.inter(color: Colors.white),
+                        ),
+                        backgroundColor: AppTheme.warning,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } else {
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const VerifyPinScreen(
+                        title: 'Verifikasi PIN Transaksi',
+                      ),
+                    ),
+                  );
+                  pinOk = result == true;
+                  if (!pinOk && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Verifikasi PIN gagal',
+                          style: GoogleFonts.inter(color: Colors.white),
+                        ),
+                        backgroundColor: AppTheme.error,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+
+                // Step 3: Abort if PIN not verified
+                if (!pinOk || !mounted) return;
+
+                // Step 4: Call secure ApiService — NO direct Firestore writes here
+                // Lock button to prevent double-spend
+                if (mounted) setState(() => _isTransferLoading = true);
+
                 try {
                   final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    final transferAmount = double.tryParse(_amount) ?? 0;
-
-                    // 1. Cek Saldo
-                    final userDoc = await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(user.uid)
-                        .get();
-                    
-                    final currentBalance = (userDoc.data()?['balance'] ?? 0) as num;
-
-                    // 2. Tolak jika saldo kurang
-                    if (transferAmount > currentBalance) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Insufficient balance. Your balance is Rp $currentBalance',
-                                    style: GoogleFonts.inter(color: Colors.white),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: AppTheme.error,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      }
-                      return; // STOP DI SINI
-                    }
-
-                    // 3. Potong Saldo
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(user.uid)
-                        .update({
-                      'balance': FieldValue.increment(-transferAmount),
-                    });
-
-                    // 4. Siapkan nama penerima untuk riwayat
-                    final contactNames = {
-                      'c1': 'Rania Kusuma',
-                      'c2': 'Budi Santoso',
-                      'c3': 'Siti Rahayu',
-                      'c4': 'Ahmad Fauzi',
-                      'c5': 'Dewi Lestari',
-                    };
-                    final recipientName =
-                        contactNames[_selectedContactId] ?? 'Recipient';
-
-                    // --- 5. INI DIA MESIN PENCATAT RIWAYATNYA! ---
-                    await FirebaseFirestore.instance.collection('transactions').add({
-                      'userId': user.uid,
-                      'recipientName': recipientName,
-                      'amount': transferAmount,
-                      'currency': _selectedCurrency,
-                      'type': 'transfer_out',
-                      'timestamp': FieldValue.serverTimestamp(),
-                      'status': 'completed',
-                    });
-                    // ---------------------------------------------
-
-                    // 6. Pindah ke Halaman Sukses
-                    final rateKey = '${_selectedCurrency}_$_targetCurrency';
-                    final rate = _rates[rateKey] ?? 1.0;
-                    final rateStr = _selectedCurrency == _targetCurrency
-                        ? '1.00'
-                        : rate < 1
-                        ? rate.toStringAsFixed(6)
-                        : rate.toStringAsFixed(4);
-
-                    if (mounted) {
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        AppRoutes.transferSuccessScreen,
-                        (_) => false,
-                        arguments: {
-                          'recipientName': recipientName,
-                          'amountSent': _amount,
-                          'sourceCurrency': _selectedCurrency,
-                          'exchangeRate': rateStr,
-                          'amountReceived': _getConvertedAmount(),
-                          'targetCurrency': _targetCurrency,
-                        },
-                      );
-                    }
+                  if (user == null) {
+                    if (mounted) setState(() => _isTransferLoading = false);
+                    return;
                   }
+
+                  final transferAmount = double.tryParse(_amount) ?? 0.0;
+                  final transferReq = TransferRequest(
+                    senderUid: user.uid,
+                    recipientUid: _selectedContactId ?? '',
+                    amount: transferAmount,
+                    recipientName: _selectedContactName ?? 'Recipient',
+                    senderName: user.displayName ?? 'User',
+                  );
+
+                  final res = await ApiService.instance.processTransfer(transferReq);
+
+                  if (!mounted) return;
+
+                  if (!res.success) {
+                    setState(() => _isTransferLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          res.error ?? res.message ?? 'Transfer failed. Please try again.',
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                        backgroundColor: AppTheme.error,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Step 5: Navigate to success screen.
+                  // HomeViewModel uses a live Firestore stream — balance
+                  // auto-updates on the home screen without a manual refresh.
+                  final rateKey = '${_selectedCurrency}_$_targetCurrency';
+                  final rate = _rates[rateKey] ?? 1.0;
+                  final rateStr = _selectedCurrency == _targetCurrency
+                      ? '1.00'
+                      : rate < 1
+                          ? rate.toStringAsFixed(6)
+                          : rate.toStringAsFixed(4);
+
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    AppRoutes.transferSuccessScreen,
+                    (_) => false,
+                    arguments: {
+                      'recipientName': _selectedContactName ?? 'Recipient',
+                      'amountSent': _amount,
+                      'sourceCurrency': _selectedCurrency,
+                      'exchangeRate': rateStr,
+                      'amountReceived': _getConvertedAmount(),
+                      'targetCurrency': _targetCurrency,
+                    },
+                  );
                 } catch (e) {
-                  debugPrint("Error potong saldo: $e");
+                  debugPrint('[TransferKeypad] Transfer error: $e');
+                  if (!mounted) return;
+                  setState(() => _isTransferLoading = false);
+                  String errorMsg = 'Transfer failed. Please try again.';
+                  if (e.toString().contains('Insufficient_Balance')) {
+                    errorMsg = 'Insufficient balance to cover amount + fee.';
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        errorMsg,
+                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                      backgroundColor: AppTheme.error,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -353,8 +399,11 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                     const SizedBox(height: 12),
                     TransferContactListWidget(
                       selectedContactId: _selectedContactId,
-                      onContactSelected: (id) =>
-                          setState(() => _selectedContactId = id),
+                      onContactSelected: (id, name) =>
+                          setState(() {
+                            _selectedContactId = id;
+                            _selectedContactName = name;
+                          }),
                     ),
                     const SizedBox(height: 12),
                     NumericKeypadWidget(
@@ -682,9 +731,9 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
   }
 
   Widget _buildConvertSendButton() {
-    final isReady = _amount.isNotEmpty && _selectedContactId != null;
+    final isReady = _amount.isNotEmpty && _selectedContactId != null && !_isTransferLoading;
     return GestureDetector(
-      onTap: _onConvertAndSend,
+      onTap: isReady ? _onConvertAndSend : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
@@ -712,19 +761,33 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.send_rounded,
-              color: isReady ? Colors.white : AppTheme.textMuted,
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Convert & Send',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
+            if (_isTransferLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            else
+              Icon(
+                Icons.send_rounded,
                 color: isReady ? Colors.white : AppTheme.textMuted,
-                letterSpacing: 0.2,
+                size: 18,
+              ),
+            const SizedBox(width: 10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                key: ValueKey(_isTransferLoading),
+                _isTransferLoading ? 'Processing...' : 'Convert & Send',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isReady || _isTransferLoading ? Colors.white : AppTheme.textMuted,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
           ],

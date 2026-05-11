@@ -1,12 +1,15 @@
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../../repositories/users_repository.dart';
 import '../../../theme/app_theme.dart';
 
 class TransferContactListWidget extends StatefulWidget {
   final String? selectedContactId;
-  final ValueChanged<String> onContactSelected;
+  final void Function(String id, String name) onContactSelected;
 
   const TransferContactListWidget({
     super.key,
@@ -20,53 +23,67 @@ class TransferContactListWidget extends StatefulWidget {
 }
 
 class _TransferContactListWidgetState extends State<TransferContactListWidget> {
-  final List<Map<String, dynamic>> _contacts = [
-    {
-      'id': 'c1',
-      'name': 'Rania Kusuma',
-      'handle': '@rania.k',
-      'currency': 'IDR',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=80&h=80&fit=crop',
-      'color': AppTheme.primary,
-    },
-    {
-      'id': 'c2',
-      'name': 'James Chen',
-      'handle': '@james.chen',
-      'currency': 'USD',
-      'avatar':
-          'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?w=80&h=80&fit=crop',
-      'color': AppTheme.accent,
-    },
-    {
-      'id': 'c3',
-      'name': 'Li Wei',
-      'handle': '@li.wei',
-      'currency': 'CNY',
-      'avatar':
-          'https://images.pixabay.com/photo/2016/11/21/12/42/beard-1845166_960_720.jpg',
-      'color': AppTheme.success,
-    },
-    {
-      'id': 'c4',
-      'name': 'Sarah Park',
-      'handle': '@sarah.p',
-      'currency': 'USD',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&h=80&fit=crop',
-      'color': AppTheme.warning,
-    },
-    {
-      'id': 'c5',
-      'name': 'Ahmad Rizki',
-      'handle': '@ahmad.r',
-      'currency': 'IDR',
-      'avatar':
-          'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?w=80&h=80&fit=crop',
-      'color': const Color(0xFF8B5CF6),
-    },
-  ];
+  final UsersRepository _usersRepository = UsersRepository.instance;
+  final TextEditingController _searchController = TextEditingController();
+  List<TransferUser> _users = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final users = await _usersRepository.getAllUsers();
+      setState(() {
+        _users = users;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _searchUsers(String query) async {
+    if (query.isEmpty) {
+      _loadUsers();
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final users = await _usersRepository.searchUsers(query);
+      setState(() {
+        _users = users;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,8 +100,55 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Search field
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _searchUsers,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or email...',
+                    hintStyle: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: AppTheme.textMuted,
+                    ),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(
+                              Icons.clear_rounded,
+                              size: 18,
+                              color: AppTheme.textMuted,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              _loadUsers();
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppTheme.surface.withAlpha(100),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: Text(
                   'Select Recipient',
                   style: GoogleFonts.inter(
@@ -95,92 +159,165 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
                   ),
                 ),
               ),
-              SizedBox(
-                height: 96,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  itemCount: _contacts.length,
-                  itemBuilder: (context, index) {
-                    final contact = _contacts[index];
-                    final isSelected =
-                        widget.selectedContactId == contact['id'];
-                    return GestureDetector(
-                      onTap: () =>
-                          widget.onContactSelected(contact['id'] as String),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (contact['color'] as Color).withAlpha(40)
-                              : AppTheme.surface.withAlpha(120),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
+              if (_isLoading)
+                const SizedBox(
+                  height: 96,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              else if (_error != null)
+                SizedBox(
+                  height: 96,
+                  child: Center(
+                    child: Text(
+                      'Error loading users',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppTheme.error,
+                      ),
+                    ),
+                  ),
+                )
+              else if (_users.isEmpty)
+                const SizedBox(
+                  height: 96,
+                  child: Center(
+                    child: Text(
+                      'No users found',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 96,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    itemCount: _users.length,
+                    itemBuilder: (context, index) {
+                      final user = _users[index];
+                      final isSelected = widget.selectedContactId == user.uid;
+                      return GestureDetector(
+                        onTap: () =>
+                            widget.onContactSelected(user.uid, user.displayName),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
                             color: isSelected
-                                ? (contact['color'] as Color).withAlpha(180)
-                                : AppTheme.glassBorder,
-                            width: isSelected ? 1.5 : 0.5,
+                                ? AppTheme.primary.withAlpha(40)
+                                : AppTheme.surface.withAlpha(120),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.primary.withAlpha(180)
+                                  : AppTheme.glassBorder,
+                              width: isSelected ? 1.5 : 0.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              user.photoUrl != null
+                                  ? Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? AppTheme.primary
+                                              : AppTheme.glassBorder,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: CachedNetworkImage(
+                                          imageUrl: user.photoUrl!,
+                                          fit: BoxFit.cover,
+                                          placeholder: (c, s) => Container(
+                                            color: AppTheme.primary.withAlpha(30),
+                                            child: const Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                          ),
+                                          errorWidget: (c, s, e) => _AvatarPlaceholder(
+                                            initials: user.initials,
+                                            isSelected: isSelected,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : _AvatarPlaceholder(
+                                      initials: user.initials,
+                                      isSelected: isSelected,
+                                    ),
+                              const SizedBox(height: 6),
+                              Text(
+                                user.displayName.split(' ').first,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? AppTheme.textPrimary
+                                      : AppTheme.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? (contact['color'] as Color)
-                                      : AppTheme.glassBorder,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: ClipOval(
-                                child: CachedNetworkImage(
-                                  imageUrl: contact['avatar'] as String,
-                                  fit: BoxFit.cover,
-                                  placeholder: (c, s) => Container(
-                                    color: (contact['color'] as Color)
-                                        .withAlpha(30),
-                                  ),
-                                  errorWidget: (c, s, e) => Container(
-                                    color: (contact['color'] as Color)
-                                        .withAlpha(60),
-                                    child: Icon(
-                                      Icons.person_rounded,
-                                      color: contact['color'] as Color,
-                                      size: 18,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              (contact['name'] as String).split(' ').first,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected
-                                    ? AppTheme.textPrimary
-                                    : AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarPlaceholder extends StatelessWidget {
+  final String initials;
+  final bool isSelected;
+
+  const _AvatarPlaceholder({
+    required this.initials,
+    required this.isSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isSelected
+            ? AppTheme.primary.withAlpha(60)
+            : AppTheme.surface.withAlpha(60),
+        border: Border.all(
+          color: isSelected ? AppTheme.primary : AppTheme.glassBorder,
+          width: 1.5,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? AppTheme.primary : AppTheme.textMuted,
           ),
         ),
       ),

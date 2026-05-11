@@ -47,6 +47,12 @@ abstract class ProfileViewModelBase extends ChangeNotifier {
     required String newEmail,
     String? currentPassword,
   });
+  /// Whether the last operation failed due to needing a recent reauthentication.
+  bool get reauthRequired;
+
+  /// Attempt to reauthenticate the current user using their password.
+  /// Returns true when reauthentication succeeds.
+  Future<bool> reauthenticateWithPassword(String password);
   Future<bool> changePassword({
     required String currentPassword,
     required String newPassword,
