@@ -7,14 +7,23 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neopay_ai/core/providers/ai_provider.dart';
+import 'package:neopay_ai/core/providers/currency_provider.dart';
 import 'package:neopay_ai/main.dart' show MyApp;
 
 // Removed incorrect package import 'package:project2/main.dart'
 
 void main() {
   testWidgets('MyApp builds', (WidgetTester tester) async {
+    // Create mock providers for testing
+    final currencyProvider = CurrencyProvider();
+    final aiProvider = AIProvider();
+    
     // Build the app and pump a single frame (avoid pumpAndSettle which may hang)
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(
+      currencyProvider: currencyProvider,
+      aiProvider: aiProvider,
+    ));
     await tester.pump();
 
     // App should contain a MaterialApp

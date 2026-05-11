@@ -13,7 +13,11 @@ import '../presentation/activity_screen/activity_screen.dart';
 import '../presentation/profile_screen/profile_screen.dart';
 import '../presentation/onboarding_screen/onboarding_screen.dart';
 import '../presentation/ai_chat/ai_chat_screen.dart';
-import '../presentation/ai_settings/ai_settings_screen.dart';
+import '../presentation/ai_assistant/ai_chat_screen.dart';
+import '../presentation/security/pin_entry_screen.dart';
+import '../presentation/security/reset_pin_screen.dart';
+import '../presentation/ocr/ocr_scanner_screen.dart';
+import '../presentation/analytics/analytics_screen.dart';
 
 class AppRoutes {
   static const String initial = '/';
@@ -26,7 +30,11 @@ class AppRoutes {
   static const String activityScreen = '/activity-screen';
   static const String profileScreen = '/profile-screen';
   static const String aiChatScreen = '/ai-chat';
-  static const String aiSettingsScreen = '/ai-settings';
+  static const String aiAssistantScreen = '/ai-assistant';
+  static const String pinEntryScreen = '/pin-entry';
+  static const String resetPinScreen = '/reset-pin';
+  static const String ocrScannerScreen = '/ocr-scanner';
+  static const String analyticsScreen = '/analytics';
   static const String onboardingScreen = '/onboarding-screen';
 
   static Map<String, WidgetBuilder> routes = {
@@ -41,7 +49,10 @@ class AppRoutes {
     activityScreen: (context) => const ActivityScreen(),
     profileScreen: (context) => const ProfileScreen(),
     aiChatScreen: (context) => const AiChatScreen(),
-    aiSettingsScreen: (context) => const AiSettingsScreen(),
+    aiAssistantScreen: (context) => const AIChatScreen(),
+    ocrScannerScreen: (context) => const OcrScannerScreen(),
+    analyticsScreen: (context) => const AnalyticsScreen(),
+    resetPinScreen: (context) => const ResetPinScreen(),
     onboardingScreen: (context) => const OnboardingScreen(),
   };
 
@@ -64,9 +75,15 @@ class AppRoutes {
       case profileScreen:
         return _buildPageRoute(const ProfileScreen(), settings);
       case aiChatScreen:
-        return _buildPageRoute(const AiChatScreen(), settings);
-      case aiSettingsScreen:
-        return _buildPageRoute(const AiSettingsScreen(), settings);
+        return _buildElegantPageRoute(const AiChatScreen(), settings);
+      case aiAssistantScreen:
+        return _buildPageRoute(const AIChatScreen(), settings);
+      case ocrScannerScreen:
+        return _buildPageRoute(const OcrScannerScreen(), settings);
+      case analyticsScreen:
+        return _buildPageRoute(const AnalyticsScreen(), settings);
+      case resetPinScreen:
+        return _buildPageRoute(const ResetPinScreen(), settings);
       case onboardingScreen:
         return _buildPageRoute(const OnboardingScreen(), settings);
       default:
@@ -76,6 +93,31 @@ class AppRoutes {
   }
 
   static PageRouteBuilder _buildPageRoute(Widget page, RouteSettings settings) {
+    // Main tabs that should use snap-fast fade transitions
+    final List<String> mainTabs = [
+      homeScreen,
+      transferKeypadScreen,
+      activityScreen,
+      profileScreen,
+    ];
+
+    // Use snap-fast fade for main tabs, slide+fade for others
+    if (mainTabs.contains(settings.name)) {
+      return PageRouteBuilder(
+        settings: settings,
+        transitionDuration: const Duration(milliseconds: 200),
+        reverseTransitionDuration: const Duration(milliseconds: 150),
+        pageBuilder: (_, __, ___) => page,
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+      );
+    }
+
+    // Default: Slide + Fade for non-main routes
     return PageRouteBuilder(
       settings: settings,
       transitionDuration: const Duration(milliseconds: 280),
@@ -91,6 +133,28 @@ class AppRoutes {
                 CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
               ),
           child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+    );
+  }
+
+  /// Elegant page transition for AI Chat Screen - slide up from bottom with fade
+  static PageRouteBuilder _buildElegantPageRoute(Widget page, RouteSettings settings) {
+    return PageRouteBuilder(
+      settings: settings,
+      transitionDuration: const Duration(milliseconds: 600),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) {
+        const begin = Offset(0.0, 1.0); // Start from bottom
+        const end = Offset.zero;
+        const curve = Curves.easeInOutQuart;
+
+        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        var offsetAnimation = animation.drive(tween);
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offsetAnimation, child: child),
         );
       },
     );

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:neopay_ai/services/hive_cache_service.dart';
 
 import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
 import 'transactions_repository.dart';
@@ -19,17 +19,12 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
-  final Future<SharedPreferences> _prefs;
 
   FirestoreTransactionsRepository({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-    SharedPreferences? prefs,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _auth = auth ?? FirebaseAuth.instance,
-       _prefs = prefs != null
-           ? Future.value(prefs)
-           : SharedPreferences.getInstance();
+       _auth = auth ?? FirebaseAuth.instance;
 
   String _getTimeAgo(Timestamp? timestamp) {
     if (timestamp == null) return 'Just now';
@@ -140,8 +135,7 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
   @override
   Future<List<TransactionModel>> loadCachedTransactions() async {
     try {
-      final prefs = await _prefs;
-      final cached = prefs.getString(_cacheKey);
+      final cached = HiveCacheService.getCachedTransactions(_cacheKey);
       if (cached == null || cached.isEmpty) {
         return [];
       }
@@ -165,7 +159,7 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
       if (lastUpdated != 0 &&
           DateTime.now().millisecondsSinceEpoch - lastUpdated >
               _cacheExpiryMs) {
-        await prefs.remove(_cacheKey);
+        await HiveCacheService.clearTransactionCache(_cacheKey);
         return [];
       }
 
@@ -186,7 +180,6 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
     List<TransactionModel> transactions,
   ) async {
     try {
-      final prefs = await _prefs;
       final list = transactions
           .take(_cacheMaxItems)
           .map((m) => m.toJson())
@@ -195,15 +188,17 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
         'items': list,
         'lastUpdated': DateTime.now().millisecondsSinceEpoch,
       };
-      await prefs.setString(_cacheKey, json.encode(payload));
+      await HiveCacheService.setCachedTransactions(
+        _cacheKey,
+        json.encode(payload),
+      );
     } catch (_) {}
   }
 
   @override
   Future<void> clearCache() async {
     try {
-      final prefs = await _prefs;
-      await prefs.remove(_cacheKey);
+      await HiveCacheService.clearTransactionCache(_cacheKey);
     } catch (_) {}
   }
 }

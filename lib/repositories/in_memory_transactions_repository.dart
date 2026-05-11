@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:neopay_ai/services/hive_cache_service.dart';
 
 import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
 import 'transactions_repository.dart';
 
-/// Simple in-memory / SharedPreferences-backed repository for tests and
+/// Simple in-memory / Hive-backed repository for tests and
 /// offline usage. It reads/writes the same cache format used by
 /// FirestoreTransactionsRepository.
 class InMemoryTransactionsRepository implements TransactionsRepository {
@@ -38,8 +38,7 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
     required int pageSize,
     dynamic cursor,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString(_cacheKey);
+    final cached = HiveCacheService.getCachedTransactions(_cacheKey);
     if (cached == null || cached.isEmpty)
       return TransactionsFetchResult(items: [], hasMore: false);
 
@@ -60,8 +59,7 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
 
   @override
   Future<List<TransactionModel>> loadCachedTransactions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString(_cacheKey);
+    final cached = HiveCacheService.getCachedTransactions(_cacheKey);
     if (cached == null || cached.isEmpty) return [];
     try {
       final decoded = json.decode(cached);
@@ -76,21 +74,22 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
     List<TransactionModel> transactions,
   ) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final list = transactions.map((m) => m.toJson()).toList();
       final payload = {
         'items': list,
         'lastUpdated': DateTime.now().millisecondsSinceEpoch,
       };
-      await prefs.setString(_cacheKey, json.encode(payload));
+      await HiveCacheService.setCachedTransactions(
+        _cacheKey,
+        json.encode(payload),
+      );
     } catch (_) {}
   }
 
   @override
   Future<void> clearCache() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cacheKey);
+      await HiveCacheService.clearTransactionCache(_cacheKey);
     } catch (_) {}
   }
 }

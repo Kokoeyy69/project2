@@ -9,8 +9,14 @@ class TransferViewModel extends ChangeNotifier {
   double _numericAmount = 0.0;
   double get numericAmount => _numericAmount;
 
-  final NumberFormat _currencyFormat =
+  final NumberFormat _currencyFormatIdr =
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+
+  /// Update display format based on wallet index (0=IDR, 1=USD, 2=CNY)
+  void updateCurrencyFormat(int walletIndex) {
+    _updateDisplay();
+    notifyListeners();
+  }
 
   // Fungsi untuk menambah angka yang dipanggil UI
   void appendDigit(String key) {
@@ -61,6 +67,6 @@ class TransferViewModel extends ChangeNotifier {
   }
 
   void _updateDisplay() {
-    _displayAmount = _currencyFormat.format(_numericAmount);
+    _displayAmount = _currencyFormatIdr.format(_numericAmount);
   }
 }

@@ -42,6 +42,10 @@ class ProfileViewModel extends ProfileViewModelBase {
   bool _showAllCurrencies = false;
   String _defaultCurrency = 'IDR';
 
+  // Reauthentication state: when true, UI should prompt the user to re-login
+  // or provide credentials to satisfy Firebase's recent-login requirement.
+  bool _reauthRequired = false;
+
   // Subscriptions
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userDocSub;
   Map<String, dynamic> _settings = {};
@@ -78,6 +82,9 @@ class ProfileViewModel extends ProfileViewModelBase {
 
   @override
   Map<String, dynamic> get settings => _settings;
+
+  @override
+  bool get reauthRequired => _reauthRequired;
 
   ProfileViewModel({
     FirebaseAuth? auth,
@@ -302,6 +309,26 @@ class ProfileViewModel extends ProfileViewModelBase {
     return false;
   }
 
+  /// Attempt password-based reauthentication. Returns true on success.
+  @override
+  Future<bool> reauthenticateWithPassword(String password) async {
+    if (_user == null || _email == null) return false;
+    try {
+      final cred = EmailAuthProvider.credential(
+        email: _email!,
+        password: password,
+      );
+      await _user!.reauthenticateWithCredential(cred);
+      _reauthRequired = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (_) {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Validate profile photo before upload
   /// Returns error message if invalid, null if valid
   String? _validateProfilePhoto(File imageFile) {
@@ -386,23 +413,38 @@ class ProfileViewModel extends ProfileViewModelBase {
             await _user!.reauthenticateWithCredential(cred);
           } on FirebaseAuthException catch (e) {
             // Wrong password or other auth error
+            if (e.code == 'requires-recent-login') {
+              _reauthRequired = true;
+              notifyListeners();
+            }
             return false;
           }
 
           // Send verification link to new email
           try {
             await _user!.verifyBeforeUpdateEmail(newEmail);
+          } on FirebaseAuthException catch (e) {
+            if (e.code == 'requires-recent-login') {
+              _reauthRequired = true;
+              notifyListeners();
+            }
+            return false;
           } catch (e) {
-            // Email might already be in use or invalid
             return false;
           }
         } else {
           // Social auth user: attempt verification without reauth
-          try {
-            await _user!.verifyBeforeUpdateEmail(newEmail);
-          } catch (e) {
-            return false;
+        try {
+          await _user!.verifyBeforeUpdateEmail(newEmail);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'requires-recent-login') {
+            _reauthRequired = true;
+            notifyListeners();
           }
+          return false;
+        } catch (e) {
+          return false;
+        }
         }
       }
 
@@ -551,6 +593,11 @@ class ProfileViewModel extends ProfileViewModelBase {
       } on FirebaseAuthException catch (e) {
         if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
           return false; // Wrong password
+        }
+        if (e.code == 'requires-recent-login') {
+          _reauthRequired = true;
+          notifyListeners();
+          return false;
         }
         rethrow;
       }

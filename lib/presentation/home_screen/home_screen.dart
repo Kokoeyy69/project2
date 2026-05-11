@@ -62,16 +62,19 @@ class _HomeScreenState extends State<HomeScreen> {
           value: _vm,
           child: Consumer<HomeViewModel>(
             builder: (context, vm, _) {
-              if (vm.isLoading)
+              if (vm.isLoading) {
                 return const Center(child: CircularProgressIndicator());
-              if (vm.hasError)
+              }
+              if (vm.hasError) {
                 return Center(
                   child: Text(
                     'Error: ${vm.error}',
                     style: const TextStyle(color: Colors.white),
                   ),
                 );
-              final balances = [vm.balance];
+              }
+              // Pass all three currency balances to the wallet carousel
+              final balances = [vm.balance, vm.balanceUsd, vm.balanceCny];
 
               return RefreshIndicator(
                 onRefresh: vm.refresh,

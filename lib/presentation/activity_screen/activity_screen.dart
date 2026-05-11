@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
 import '../../routes/app_routes.dart';
@@ -21,211 +23,236 @@ class _ActivityScreenState extends State<ActivityScreen> {
   String _selectedFilter = 'All';
   bool _isLoading = false;
   bool _hasError = false;
+  bool _isFetchingMore = false;
+  bool _hasMoreData = true;
+  DocumentSnapshot? _lastVisibleDoc;
 
-  final List<String> _filters = [
-    'All',
-    'Shopping',
-    'Food',
-    'Bills',
-    'Transfer',
-  ];
+  final List<String> _filters = ['All', 'Shopping', 'Food', 'Bills', 'Transfer'];
+  List<double> _weeklySpending = List.filled(7, 0.0);
+  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // Weekly spending data (Mon-Sun)
-  // Weekly spending data (Mon-Sun)
-  List<double> _weeklySpending = List.filled(
-    7,
-    0.0,
-  ); // Diisi 0 semua dari Senin-Minggu
-  final List<String> _weekDays = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
-
-  // Category breakdown & Summary
   List<_CategoryData> _categories = [];
   double _totalIncome = 0.0;
   double _totalExpense = 0.0;
-
   List<Map<String, dynamic>> _transactions = [];
+
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _fetchFirebaseTransactions();
+    _fetchTransactions(isRefresh: true);
+    _scrollController.addListener(_onScroll);
   }
 
-  void _fetchFirebaseTransactions() {
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isFetchingMore &&
+        _hasMoreData) {
+      _fetchTransactions(isRefresh: false);
+    }
+  }
+
+  Future<void> _fetchTransactions({bool isRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    setState(() => _isLoading = true);
+    final String currentUid = user.uid;
 
-    FirebaseFirestore.instance
-        .collection('transactions')
-        .where('userId', isEqualTo: user.uid)
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            final List<Map<String, dynamic>> liveData = [];
+    if (isRefresh) {
+      setState(() {
+        _isLoading = true;
+        _transactions.clear();
+        _lastVisibleDoc = null;
+        _hasMoreData = true;
+      });
+    } else {
+      setState(() => _isFetchingMore = true);
+    }
 
-            // Variabel penampung hitungan sementara
-            double tempIncome = 0.0;
-            double tempExpense = 0.0;
-            List<double> tempWeekly = List.filled(7, 0.0);
-            Map<String, double> catTotals = {};
-            double totalCatExpense = 0.0;
+    try {
+      QuerySnapshot snapshot;
 
-            // Cari rentang tanggal minggu ini (Senin - Minggu)
-            DateTime now = DateTime.now();
-            int currentWeekday = now.weekday;
-            DateTime startOfWeek = DateTime(
-              now.year,
-              now.month,
-              now.day,
-            ).subtract(Duration(days: currentWeekday - 1));
-            DateTime endOfWeek = startOfWeek.add(
-              const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
-            );
+      if (isRefresh || _lastVisibleDoc == null) {
+        snapshot = await FirebaseFirestore.instance
+            .collection('transactions')
+            .where(Filter.or(
+              Filter('sender_uid', isEqualTo: currentUid),
+              Filter('recipient_uid', isEqualTo: currentUid),
+            ))
+            .orderBy('timestamp', descending: true)
+            .limit(15)
+            .get();
+      } else {
+        snapshot = await FirebaseFirestore.instance
+            .collection('transactions')
+            .where(Filter.or(
+              Filter('sender_uid', isEqualTo: currentUid),
+              Filter('recipient_uid', isEqualTo: currentUid),
+            ))
+            .orderBy('timestamp', descending: true)
+            .startAfterDocument(_lastVisibleDoc!)
+            .limit(15)
+            .get();
+      }
 
-            for (var doc in snapshot.docs) {
-              final data = doc.data();
-              final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
-              final currency = data['currency'] ?? 'IDR';
+      if (snapshot.docs.isEmpty) {
+        setState(() => _hasMoreData = false);
+      } else {
+        _lastVisibleDoc = snapshot.docs.last;
 
-              final isExpense = data['type'] == 'transfer_out';
-              final category = isExpense ? 'Transfer' : 'Shopping';
+        // Process and add new transactions (avoid duplicates)
+        final existingIds = _transactions.map((t) => t['id'] as String).toSet();
+        for (var doc in snapshot.docs) {
+          if (!existingIds.contains(doc.id)) {
+            final data = doc.data() as Map<String, dynamic>;
+            final bool isExpense = data['sender_uid'] == currentUid;
+            final double amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
+            final String currency = data['currency'] ?? 'IDR';
+            final Timestamp? ts = data['timestamp'] as Timestamp?;
+            final DateTime dt = ts != null ? ts.toDate() : DateTime.now();
 
-              String amountStr = amountVal
-                  .toStringAsFixed(0)
-                  .replaceAllMapped(
-                    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                    (m) => '${m[1]}.',
-                  );
-              String prefix = currency == 'USD'
-                  ? '\$'
-                  : (currency == 'CNY' ? '¥ ' : 'Rp ');
+            String amountStr = amountVal
+                .toStringAsFixed(0)
+                .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+            String currencyPrefix = currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp ');
 
-              Timestamp? ts = data['timestamp'] as Timestamp?;
-              DateTime dt = ts != null ? ts.toDate() : DateTime.now();
-
-              // --- PROSES HITUNG MATEMATIKA ---
-              if (isExpense) {
-                tempExpense += amountVal;
-                catTotals[category] = (catTotals[category] ?? 0.0) + amountVal;
-                totalCatExpense += amountVal;
-
-                if (dt.isAfter(
-                      startOfWeek.subtract(const Duration(seconds: 1)),
-                    ) &&
-                    dt.isBefore(endOfWeek.add(const Duration(seconds: 1)))) {
-                  int dayIndex = dt.weekday - 1;
-                  tempWeekly[dayIndex] += amountVal;
-                }
-              } else {
-                tempIncome += amountVal;
-              }
-
-              liveData.add({
-                'id': doc.id,
-                'date': DateFormat('MMM d').format(dt),
-                'name': data['recipientName'] ?? 'Unknown Merchant',
-                'category': category,
-                'amount': isExpense
-                    ? '-$prefix$amountStr'
-                    : '+$prefix$amountStr',
-                'amountSign': isExpense ? -1 : 1,
-                'currency': currency,
-                'icon': Icons.swap_horiz_rounded,
-                'color': const Color(0xFF3B82F6),
-                'time': DateFormat('HH:mm').format(dt),
-                'status': data['status'] ?? 'completed',
-              });
-            }
-
-            // Olah persentase Category Breakdown
-            List<_CategoryData> tempCategories = [];
-            List<Color> catColors = [
-              const Color(0xFF8B5CF6),
-              AppTheme.warning,
-              AppTheme.error,
-              const Color(0xFF3B82F6),
-            ];
-            int colorIdx = 0;
-
-            catTotals.forEach((key, value) {
-              int percentage = totalCatExpense > 0
-                  ? ((value / totalCatExpense) * 100).round()
-                  : 0;
-              if (percentage > 0) {
-                tempCategories.add(
-                  _CategoryData(
-                    key,
-                    percentage,
-                    catColors[colorIdx % catColors.length],
-                  ),
-                );
-                colorIdx++;
-              }
+            _transactions.add({
+              'id': doc.id,
+              'date': DateFormat('MMM d').format(dt),
+              'name': isExpense
+                  ? 'Transfer ke ${data['recipient_name'] ?? 'Pengguna'}'
+                  : 'Terima dari ${data['sender_name'] ?? 'Pengguna'}',
+              'category': 'Transfer',
+              'amount': '${isExpense ? '-' : '+'} $currencyPrefix$amountStr',
+              'amountSign': isExpense ? -1 : 1,
+              'currency': currency,
+              'icon': isExpense ? Icons.arrow_upward : Icons.arrow_downward,
+              'color': isExpense ? AppTheme.error : AppTheme.success,
+              'time': DateFormat('HH:mm').format(dt),
+              'status': data['status'] ?? 'completed',
             });
-            tempCategories.sort((a, b) => b.percentage.compareTo(a.percentage));
+          }
+        }
+      }
 
-            if (mounted) {
-              setState(() {
-                _transactions = liveData;
-                _totalIncome = tempIncome;
-                _totalExpense = tempExpense;
-                _weeklySpending = tempWeekly;
-                _categories = tempCategories;
-                _isLoading = false;
-              });
-            }
-          },
-          onError: (error) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _hasError = true;
-              });
-              _showConnectionErrorModal();
-            }
-          },
-        );
+      // Recalculate stats
+      _calculateStats();
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isFetchingMore = false;
+          _hasError = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isFetchingMore = false;
+          _hasError = true;
+        });
+        _showFirestoreIndexErrorModal(e.toString());
+      }
+    }
+  }
+
+  void _calculateStats() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final String currentUid = user.uid;
+
+    double tempIncome = 0.0;
+    double tempExpense = 0.0;
+    List<double> tempWeekly = List.filled(7, 0.0);
+    Map<String, double> catTotals = {};
+    double totalCatExpense = 0.0;
+
+    DateTime now = DateTime.now();
+    int currentWeekday = now.weekday;
+    DateTime startOfWeek = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: currentWeekday - 1));
+    DateTime endOfWeek = startOfWeek.add(
+        const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+
+    for (var t in _transactions) {
+      final bool isExpense = t['amountSign'] == -1;
+      final amountStr = t['amount'] as String;
+      // Extract numeric value from formatted string
+      final numericStr = amountStr.replaceAll(RegExp(r'[^0-9.]'), '');
+      final amountVal = double.tryParse(numericStr) ?? 0.0;
+
+      if (isExpense) {
+        tempExpense += amountVal;
+        catTotals['Transfer'] = (catTotals['Transfer'] ?? 0.0) + amountVal;
+        totalCatExpense += amountVal;
+
+        // Parse date and check if in current week
+        final dateStr = t['date'] as String;
+        // Simple approximation for weekly chart
+        final dayIndex = (now.difference(DateTime(now.year, now.month, 1)).inDays) % 7;
+        if (dayIndex >= 0 && dayIndex < 7) {
+          tempWeekly[dayIndex] += amountVal;
+        }
+      } else {
+        tempIncome += amountVal;
+      }
+    }
+
+    // Calculate percentages
+    List<_CategoryData> tempCategories = [];
+    List<Color> catColors = [
+      const Color(0xFF8B5CF6),
+      AppTheme.warning,
+      AppTheme.error,
+      const Color(0xFF3B82F6),
+    ];
+    int colorIdx = 0;
+
+    catTotals.forEach((key, value) {
+      int percentage = totalCatExpense > 0 ? ((value / totalCatExpense) * 100).round() : 0;
+      if (percentage > 0) {
+        tempCategories.add(_CategoryData(key, percentage, catColors[colorIdx % catColors.length]));
+        colorIdx++;
+      }
+    });
+    tempCategories.sort((a, b) => b.percentage.compareTo(a.percentage));
+
+    setState(() {
+      _totalIncome = tempIncome;
+      _totalExpense = tempExpense;
+      _weeklySpending = tempWeekly;
+      _categories = tempCategories;
+    });
+  }
+
+  Future<void> _handleRefresh() async {
+    await _fetchTransactions(isRefresh: true);
   }
 
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
     if (index == 0) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.homeScreen,
-        (_) => false,
-      );
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.homeScreen, (_) => false);
     } else if (index == 1) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.transferKeypadScreen,
-        (_) => false,
-      );
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.transferKeypadScreen, (_) => false);
     } else if (index == 3) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.profileScreen,
-        (_) => false,
-      );
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.profileScreen, (_) => false);
     }
   }
 
   List<Map<String, dynamic>> get _filteredTransactions {
     if (_selectedFilter == 'All') return _transactions;
-    return _transactions
-        .where((t) => t['category'] == _selectedFilter)
-        .toList();
+    return _transactions.where((t) => t['category'] == _selectedFilter).toList();
   }
 
   List<String> get _groupedDates {
@@ -236,9 +263,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return dates;
   }
 
-  void _showConnectionErrorModal() {
+  void _showFirestoreIndexErrorModal(String errorMessage) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       barrierColor: Colors.black.withAlpha(160),
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -253,147 +281,57 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: AppTheme.error.withAlpha(80),
-                    width: 0.5,
-                  ),
+                  border: Border.all(color: Colors.orange.withAlpha(80), width: 0.5),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Error icon
                     Container(
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: AppTheme.errorMuted,
+                        color: Colors.orange.withAlpha(40),
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.error.withAlpha(80),
-                          width: 1,
-                        ),
+                        border: Border.all(color: Colors.orange.withAlpha(80), width: 1),
                       ),
-                      child: const Icon(
-                        Icons.wifi_off_rounded,
-                        color: AppTheme.error,
-                        size: 28,
-                      ),
+                      child: const Icon(Icons.settings_suggest, color: Colors.orange, size: 28),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      'Connection Lost',
-                      style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
+                    Text('Menyiapkan Database...',
+                        style: GoogleFonts.inter(
+                            fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
                     const SizedBox(height: 8),
                     Text(
-                      'Unable to reach the server. Please check your internet connection and try again.',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: AppTheme.textSecondary,
-                        height: 1.6,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
+                        'Sistem NeoPay sedang mengonfigurasi indeks untuk riwayat dua arah. Silakan klik link di terminal dan klik "Create Index". Tunggu sebentar lalu refresh.',
+                        style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary, height: 1.6),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppTheme.errorMuted,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppTheme.error.withAlpha(60),
-                          width: 0.5,
-                        ),
+                        color: AppTheme.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.withAlpha(60)),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.warning_amber_rounded,
-                            color: AppTheme.error,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Error code: NET_ERR_CONNECTION_REFUSED',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: AppTheme.error,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        errorMessage.length > 200 ? '${errorMessage.substring(0, 200)}...' : errorMessage,
+                        style: TextStyle(fontSize: 10, color: AppTheme.textMuted, fontFamily: 'monospace'),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.textSecondary,
-                              side: const BorderSide(
-                                color: AppTheme.glassBorder,
-                                width: 0.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: Text(
-                              'Dismiss',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              setState(() {
-                                _hasError = false;
-                                _isLoading = true;
-                              });
-                              Future.delayed(
-                                const Duration(milliseconds: 1500),
-                                () {
-                                  if (mounted) {
-                                    setState(() => _isLoading = false);
-                                  }
-                                },
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.error,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: Text(
-                              'Try Again',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _handleRefresh();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      ),
+                      child: Text('Refresh',
+                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
                   ],
                 ),
@@ -418,53 +356,55 @@ class _ActivityScreenState extends State<ActivityScreen> {
             Expanded(
               child: Builder(
                 builder: (context) {
-                  if (_isLoading) return _buildShimmerState();
-                  if (_hasError) {
+                  if (_isLoading && _transactions.isEmpty) {
+                    return _buildShimmerLoading();
+                  }
+                  if (_hasError && _transactions.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'Failed to load activity',
-                            style: GoogleFonts.inter(
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
+                          Text('Failed to load activity',
+                              style: GoogleFonts.inter(color: AppTheme.textSecondary)),
                           const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _fetchFirebaseTransactions,
-                            child: const Text('Retry'),
-                          ),
+                          ElevatedButton(onPressed: _handleRefresh, child: const Text('Retry')),
                         ],
                       ),
                     );
                   }
 
-                  return ListView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
-                    children: [
-                      _buildSpendingAnalysis(),
-                      _buildSummaryRow(),
-                      _buildFilterChips(),
-                      const SizedBox(height: 8),
-                      if (_filteredTransactions.isEmpty)
-                        _buildEmptyState()
-                      else
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(
-                            children: [
-                              for (final date in _groupedDates) ...[
-                                _buildDateSeparator(date),
-                                ..._filteredTransactions
-                                    .where((t) => t['date'] == date)
-                                    .map((t) => _buildTransactionCard(t)),
+                  return RefreshIndicator(
+                    onRefresh: _handleRefresh,
+                    color: AppTheme.primary,
+                    child: ListView(
+                      controller: _scrollController,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
+                      children: [
+                        _buildSpendingAnalysis(),
+                        _buildSummaryRow(),
+                        _buildFilterChips(),
+                        const SizedBox(height: 8),
+                        if (_filteredTransactions.isEmpty && !_isLoading)
+                          _buildEmptyState()
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Column(
+                              children: [
+                                for (final date in _groupedDates) ...[
+                                  _buildDateSeparator(date),
+                                  ..._filteredTransactions
+                                      .where((t) => t['date'] == date)
+                                      .map((t) => _buildTransactionCard(t)),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                    ],
+                        if (_isFetchingMore) _buildLoadingMoreIndicator(),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -472,9 +412,115 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: AppNavigation(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
+      bottomNavigationBar: AppNavigation(currentIndex: _currentNavIndex, onTap: _onNavTap),
+    );
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+      children: [
+        Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Container(
+            height: 260,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Shimmer.fromColors(
+                baseColor: Colors.grey[300]!,
+                highlightColor: Colors.grey[100]!,
+                child: Container(
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Shimmer.fromColors(
+                baseColor: Colors.grey[300]!,
+                highlightColor: Colors.grey[100]!,
+                child: Container(
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ...List.generate(8, (_) => _buildTransactionShimmer()),
+      ],
+    );
+  }
+
+  Widget _buildTransactionShimmer() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[300]!,
+        highlightColor: Colors.grey[100]!,
+        child: Container(
+          height: 68,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(height: 12, width: 120, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                    const SizedBox(height: 6),
+                    Container(height: 10, width: 80, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                  ],
+                ),
+              ),
+              Container(height: 12, width: 60, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingMoreIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: SpinKitThreeBounce(
+          color: AppTheme.primary,
+          size: 20,
+        ),
       ),
     );
   }
@@ -484,17 +530,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Row(
         children: [
-          Text(
-            'Activity',
-            style: GoogleFonts.inter(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
+          Text('Activity',
+              style: GoogleFonts.inter(
+                  fontSize: 24, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
           const Spacer(),
           GestureDetector(
-            onTap: _showConnectionErrorModal,
+            onTap: () => _showFirestoreIndexErrorModal('Manual trigger'),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: BackdropFilter(
@@ -506,11 +547,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppTheme.glassBorder, width: 0.5),
                   ),
-                  child: const Icon(
-                    Icons.tune_rounded,
-                    color: AppTheme.textSecondary,
-                    size: 18,
-                  ),
+                  child: const Icon(Icons.tune_rounded, color: AppTheme.textSecondary, size: 18),
                 ),
               ),
             ),
@@ -519,8 +556,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ),
     );
   }
-
-  // ── Spending Analysis Section ─────────────────────────────────────────────
 
   Widget _buildSpendingAnalysis() {
     return Padding(
@@ -539,55 +574,34 @@ class _ActivityScreenState extends State<ActivityScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
                 Row(
                   children: [
-                    Text(
-                      'Spending Analysis',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
+                    Text('Spending Analysis',
+                        style: GoogleFonts.inter(
+                            fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppTheme.successMuted,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        'This Week',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.success,
-                        ),
-                      ),
+                      child: Text('This Week',
+                          style: GoogleFonts.inter(
+                              fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.success)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Line chart
                 _buildLineChart(),
                 const SizedBox(height: 20),
                 Container(height: 0.5, color: AppTheme.separator),
                 const SizedBox(height: 16),
-                // Category breakdown
                 Row(
                   children: [
-                    Text(
-                      'Category Breakdown',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
+                    Text('Category Breakdown',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -611,36 +625,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
             show: true,
             drawVerticalLine: false,
             horizontalInterval: interval,
-            getDrawingHorizontalLine: (value) =>
-                FlLine(color: AppTheme.separator, strokeWidth: 0.5),
+            getDrawingHorizontalLine: (value) => FlLine(color: AppTheme.separator, strokeWidth: 0.5),
           ),
           titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
+            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 24,
                 getTitlesWidget: (value, meta) {
                   final idx = value.toInt();
-                  if (idx < 0 || idx >= _weekDays.length) {
-                    return const SizedBox.shrink();
-                  }
-                  return Text(
-                    _weekDays[idx],
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      color: AppTheme.textMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  );
+                  if (idx < 0 || idx >= _weekDays.length) return const SizedBox.shrink();
+                  return Text(_weekDays[idx],
+                      style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted, fontWeight: FontWeight.w500));
                 },
               ),
             ),
@@ -652,36 +651,27 @@ class _ActivityScreenState extends State<ActivityScreen> {
           maxY: maxVal > 0 ? maxVal * 1.2 : 100.0,
           lineBarsData: [
             LineChartBarData(
-              spots: List.generate(
-                _weeklySpending.length,
-                (i) => FlSpot(i.toDouble(), _weeklySpending[i]),
-              ),
+              spots: List.generate(_weeklySpending.length, (i) => FlSpot(i.toDouble(), _weeklySpending[i])),
               isCurved: true,
               curveSmoothness: 0.35,
-              gradient: const LinearGradient(
-                colors: [AppTheme.success, Color(0xFF34D399)],
-              ),
+              gradient: const LinearGradient(colors: [AppTheme.success, Color(0xFF34D399)]),
               barWidth: 2.5,
               isStrokeCapRound: true,
               dotData: FlDotData(
                 show: true,
-                getDotPainter: (spot, percent, barData, index) =>
-                    FlDotCirclePainter(
-                      radius: 3,
-                      color: AppTheme.success,
-                      strokeWidth: 1.5,
-                      strokeColor: AppTheme.background,
-                    ),
+                getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                  radius: 3,
+                  color: AppTheme.success,
+                  strokeWidth: 1.5,
+                  strokeColor: AppTheme.background,
+                ),
               ),
               belowBarData: BarAreaData(
                 show: true,
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    AppTheme.success.withAlpha(60),
-                    AppTheme.success.withAlpha(0),
-                  ],
+                  colors: [AppTheme.success.withAlpha(60), AppTheme.success.withAlpha(0)],
                 ),
               ),
             ),
@@ -694,7 +684,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Widget _buildCategoryBreakdown() {
     return Row(
       children: [
-        // Donut chart
         SizedBox(
           width: 80,
           height: 80,
@@ -703,58 +692,39 @@ class _ActivityScreenState extends State<ActivityScreen> {
               sectionsSpace: 2,
               centerSpaceRadius: 24,
               sections: _categories
-                  .map(
-                    (c) => PieChartSectionData(
-                      value: c.percentage.toDouble(),
-                      color: c.color,
-                      radius: 16,
-                      showTitle: false,
-                    ),
-                  )
+                  .map((c) => PieChartSectionData(
+                        value: c.percentage.toDouble(),
+                        color: c.color,
+                        radius: 16,
+                        showTitle: false,
+                      ))
                   .toList(),
             ),
           ),
         ),
         const SizedBox(width: 20),
-        // Legend
         Expanded(
           child: Column(
             children: _categories
-                .map(
-                  (c) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: c.color,
-                            shape: BoxShape.circle,
+                .map((c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(color: c.color, shape: BoxShape.circle),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          c.name,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${c.percentage}%',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: c.color,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+                          const SizedBox(width: 8),
+                          Text(c.name,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w500)),
+                          const Spacer(),
+                          Text('${c.percentage}%',
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: c.color)),
+                        ],
+                      ),
+                    ))
                 .toList(),
           ),
         ),
@@ -762,142 +732,27 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // ── Shimmer Loading State ─────────────────────────────────────────────────
-
-  Widget _buildShimmerState() {
-    return ListView(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
-      children: [
-        _buildShimmerCard(height: 260),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _buildShimmerCard(height: 64)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildShimmerCard(height: 64)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ...List.generate(5, (_) => _buildShimmerTransaction()),
-      ],
-    );
-  }
-
-  Widget _buildShimmerCard({required double height}) {
-    return _ShimmerWidget(
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildShimmerTransaction() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: _ShimmerWidget(
-        child: Container(
-          height: 68,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      height: 12,
-                      width: 120,
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceElevated,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 10,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceElevated,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                height: 12,
-                width: 60,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Summary Row ───────────────────────────────────────────────────────────
-
   Widget _buildSummaryRow() {
-    final NumberFormat currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
+    final NumberFormat currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Row(
         children: [
           Expanded(
-            child: _buildSummaryCard(
-              'Income',
-              currencyFormat.format(_totalIncome),
-              AppTheme.success,
-              Icons.arrow_downward_rounded,
-            ),
+            child: _buildSummaryCard('Income', currencyFormat.format(_totalIncome), AppTheme.success,
+                Icons.arrow_downward_rounded),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _buildSummaryCard(
-              'Expenses',
-              currencyFormat.format(_totalExpense),
-              AppTheme.error,
-              Icons.arrow_upward_rounded,
-            ),
+            child: _buildSummaryCard('Expenses', currencyFormat.format(_totalExpense), AppTheme.error,
+                Icons.arrow_upward_rounded),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(
-    String label,
-    String amount,
-    Color color,
-    IconData icon,
-  ) {
+  Widget _buildSummaryCard(String label, String amount, Color color, IconData icon) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
@@ -924,25 +779,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      label,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppTheme.textMuted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text(label,
+                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.w500)),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        amount,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                      ),
+                      child: Text(amount,
+                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
                     ),
                   ],
                 ),
@@ -974,18 +817,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 color: isSelected ? AppTheme.primary : AppTheme.glassBackground,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected ? AppTheme.primary : AppTheme.glassBorder,
-                  width: 0.5,
-                ),
+                    color: isSelected ? AppTheme.primary : AppTheme.glassBorder, width: 0.5),
               ),
-              child: Text(
-                filter,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppTheme.textSecondary,
-                ),
-              ),
+              child: Text(filter,
+                  style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : AppTheme.textSecondary)),
             ),
           );
         },
@@ -998,15 +836,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Text(
-            date,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textMuted,
-              letterSpacing: 0.5,
-            ),
-          ),
+          Text(date,
+              style: GoogleFonts.inter(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textMuted, letterSpacing: 0.5)),
           const SizedBox(width: 12),
           Expanded(child: Container(height: 0.5, color: AppTheme.separator)),
         ],
@@ -1016,6 +848,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _buildTransactionCard(Map<String, dynamic> transaction) {
     final isPositive = (transaction['amountSign'] as int) > 0;
+    final amountColor = transaction['color'] as Color? ??
+        (isPositive ? AppTheme.success : AppTheme.error);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: ClipRRect(
@@ -1035,77 +870,46 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: (transaction['color'] as Color).withAlpha(30),
+                    color: amountColor.withAlpha(30),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: (transaction['color'] as Color).withAlpha(60),
-                      width: 0.5,
-                    ),
+                    border: Border.all(color: amountColor.withAlpha(60), width: 0.5),
                   ),
-                  child: Icon(
-                    transaction['icon'] as IconData,
-                    color: transaction['color'] as Color,
-                    size: 20,
-                  ),
+                  child: Icon(transaction['icon'] as IconData, color: amountColor, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        transaction['name'] as String,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(transaction['name'] as String,
+                          style: GoogleFonts.inter(
+                              fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: (transaction['color'] as Color).withAlpha(
-                                25,
-                              ),
+                              color: amountColor.withAlpha(25),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              transaction['category'] as String,
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: transaction['color'] as Color,
-                              ),
-                            ),
+                            child: Text(transaction['category'] as String,
+                                style: GoogleFonts.inter(
+                                    fontSize: 10, fontWeight: FontWeight.w600, color: amountColor)),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            transaction['time'] as String,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
+                          Text(transaction['time'] as String,
+                              style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted)),
                         ],
                       ),
                     ],
                   ),
                 ),
-                Text(
-                  transaction['amount'] as String,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: isPositive ? AppTheme.success : AppTheme.textPrimary,
-                  ),
-                ),
+                const SizedBox(width: 8),
+                Text(transaction['amount'] as String,
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: amountColor)),
               ],
             ),
           ),
@@ -1122,7 +926,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(height: 40),
-            // Minimalist illustration container
             Container(
               width: 100,
               height: 100,
@@ -1158,51 +961,30 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       ),
                     ),
                   ),
-                  const Icon(
-                    Icons.receipt_long_rounded,
-                    color: AppTheme.textMuted,
-                    size: 32,
-                  ),
+                  const Icon(Icons.receipt_long_rounded, color: AppTheme.textMuted, size: 32),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            Text(
-              'No Transactions Yet',
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
-              ),
-            ),
+            Text('No Transactions Yet',
+                style: GoogleFonts.inter(
+                    fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              'Your transaction history will appear here\nonce you make your first transfer.',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-                height: 1.6,
-              ),
-              textAlign: TextAlign.center,
-            ),
+                'Your transaction history will appear here\nonce you make your first transfer.',
+                style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary, height: 1.6),
+                textAlign: TextAlign.center),
             const SizedBox(height: 28),
             GestureDetector(
               onTap: () => Navigator.pushNamedAndRemoveUntil(
-                context,
-                AppRoutes.transferKeypadScreen,
-                (_) => false,
-              ),
+                  context, AppRoutes.transferKeypadScreen, (_) => false),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.accent],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
+                      colors: [AppTheme.primary, AppTheme.accent],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -1215,20 +997,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
+                    const Icon(Icons.send_rounded, color: Colors.white, size: 16),
                     const SizedBox(width: 8),
-                    Text(
-                      'Make First Transfer',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
+                    Text('Make First Transfer',
+                        style: GoogleFonts.inter(
+                            fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                   ],
                 ),
               ),
@@ -1241,69 +1014,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 }
 
-// ── Helper Widgets & Models ───────────────────────────────────────────────────
-
 class _CategoryData {
   final String name;
   final int percentage;
   final Color color;
   const _CategoryData(this.name, this.percentage, this.color);
-}
-
-class _ShimmerWidget extends StatefulWidget {
-  final Widget child;
-  const _ShimmerWidget({required this.child});
-
-  @override
-  State<_ShimmerWidget> createState() => _ShimmerWidgetState();
-}
-
-class _ShimmerWidgetState extends State<_ShimmerWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-    _animation = Tween<double>(
-      begin: -1.5,
-      end: 2.5,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) => ShaderMask(
-        blendMode: BlendMode.srcATop,
-        shaderCallback: (bounds) => LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          stops: [
-            (_animation.value - 0.5).clamp(0.0, 1.0),
-            _animation.value.clamp(0.0, 1.0),
-            (_animation.value + 0.5).clamp(0.0, 1.0),
-          ],
-          colors: [
-            AppTheme.surfaceVariant,
-            AppTheme.surfaceElevated,
-            AppTheme.surfaceVariant,
-          ],
-        ).createShader(bounds),
-        child: widget.child,
-      ),
-    );
-  }
 }

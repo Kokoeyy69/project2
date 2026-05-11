@@ -79,6 +79,12 @@ class FakeProfileViewModel extends ProfileViewModelBase {
   Map<String, dynamic> get settings => _settings;
 
   @override
+  bool get reauthRequired => false;
+
+  @override
+  Future<bool> reauthenticateWithPassword(String password) async => false;
+
+  @override
   Future<void> initProfile() async {}
 
   @override

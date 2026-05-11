@@ -40,6 +40,7 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
   int _currentNavIndex = 1;
   int _selectedWalletIndex = 0;
   String _selectedRecipientId = '';
+  String _selectedRecipientName = '';
 
   void _onNavTap(int index) {
     setState(() => _currentNavIndex = index);
@@ -56,8 +57,11 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
     setState(() => _selectedWalletIndex = index);
   }
 
-  void _onRecipientSelected(String id) {
-    setState(() => _selectedRecipientId = id);
+  void _onRecipientSelected(String id, String name) {
+    setState(() {
+      _selectedRecipientId = id;
+      _selectedRecipientName = name;
+    });
   }
 
   @override
@@ -238,6 +242,7 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
                 ConfirmTransferButtonWidget(
                   amount: transferViewModel.numericAmount,
                   recipientId: _selectedRecipientId,
+                  recipientName: _selectedRecipientName,
                   walletIndex: _selectedWalletIndex,
                 ),
                 const SizedBox(height: 20),
@@ -311,6 +316,7 @@ class _TransferScreenContentState extends State<_TransferScreenContent> {
                 ConfirmTransferButtonWidget(
                   amount: transferViewModel.numericAmount,
                   recipientId: _selectedRecipientId,
+                  recipientName: _selectedRecipientName,
                   walletIndex: _selectedWalletIndex,
                 ),
               ],

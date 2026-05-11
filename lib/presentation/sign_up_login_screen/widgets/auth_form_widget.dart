@@ -91,18 +91,32 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
           password: _passwordController.text,
         );
       } else {
-        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
+        UserCredential userCredential = await _auth
+            .createUserWithEmailAndPassword(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            );
         String newUid = userCredential.user!.uid;
 
+        // Generate a handle from the name (lowercase, no spaces)
+        final name = _nameController.text.trim();
+        final handle = name.toLowerCase().replaceAll(' ', '.');
+
         await FirebaseFirestore.instance.collection('users').doc(newUid).set({
-          'name': _nameController.text.trim(), // Ambil nama dari inputan form
-          'email': _emailController.text.trim(),
-          'balance': 0, // Inisialisasi saldo dengan angka 0
+          'uid': newUid, // Store uid in document for easy access
+          'name': name,
+          'email': _emailController.text.trim().toLowerCase(),
+          'handle': handle,
+          'photoUrl': null, // No photo on registration
+          'balance': 0, // Initialize balance to 0
+          'balance_usd': 0,
+          'balance_cny': 0,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        debugPrint(
+          '[Auth] Created user document for $newUid with handle: $handle',
+        );
       }
       if (!mounted) return;
       widget.onSuccess();
@@ -110,8 +124,8 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
       setState(() {
         _errorMessage = e.message;
       });
-      } catch (e) {
-        setState(() {
+    } catch (e) {
+      setState(() {
         _errorMessage = "Gagal membuat dokumen database: $e";
       });
     } finally {
@@ -185,7 +199,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
                       _buildGlassField(
                         controller: _emailController,
                         label: 'Email Address',
-                        hint: 'you@neopay.ai',
+                        hint: 'you@neopay-api-eight.vercel.app',
                         icon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
