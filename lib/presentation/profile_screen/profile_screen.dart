@@ -494,6 +494,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           subtitle: 'Last changed 30 days ago',
           onTap: _changePassword,
         ),
+        _buildDivider(),
+        _buildNavTile(
+          icon: Icons.lock_reset_rounded,
+          iconColor: AppTheme.primary,
+          title: 'Ganti PIN',
+          subtitle: 'Change your transaction PIN',
+          onTap: _changePin,
+        ),
       ],
     );
   }
@@ -1155,6 +1163,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   }
                 } catch (e) {
                   _showSnack('Failed to change password: $e', true);
+                }
+              },
+              child: const Text('Change'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _changePin() async {
+    if (_vm.user == null) {
+      _showSnack('Not signed in', true);
+      return;
+    }
+
+    final currentPinCtl = TextEditingController();
+    final newPinCtl = TextEditingController();
+    final confirmPinCtl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Ganti PIN'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: currentPinCtl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Current PIN',
+                    hintText: '6 digits',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.length != 6) {
+                      return 'Enter 6-digit PIN';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: newPinCtl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'New PIN',
+                    hintText: '6 digits',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.length != 6) {
+                      return 'Enter 6-digit PIN';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: confirmPinCtl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm New PIN',
+                    hintText: '6 digits',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.length != 6) {
+                      return 'Enter 6-digit PIN';
+                    }
+                    if (v != newPinCtl.text) {
+                      return 'PINs do not match';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.pop(context);
+                try {
+                  final securityService = SecurityService.instance;
+                  final success = await securityService.changeTransactionPin(
+                    currentPinCtl.text,
+                    newPinCtl.text,
+                  );
+                  if (success) {
+                    _showSnack('PIN updated successfully');
+                  } else {
+                    _showSnack('Current PIN is incorrect', true);
+                  }
+                } catch (e) {
+                  _showSnack('Failed to change PIN: $e', true);
                 }
               },
               child: const Text('Change'),

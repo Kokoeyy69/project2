@@ -241,11 +241,4 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
       ),
     );
   }
-
-  void _showSnack(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppTheme.primary),
-    );
-  }
 }

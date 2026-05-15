@@ -15,16 +15,12 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
 
   List<TransactionModel> _fromPayload(dynamic decoded) {
     List<dynamic> list = <dynamic>[];
-    int lastUpdated = 0;
 
     if (decoded is List) {
       list = decoded;
     } else if (decoded is Map) {
       if (decoded['items'] is List) {
         list = decoded['items'] as List<dynamic>;
-        lastUpdated = decoded['lastUpdated'] is int
-            ? decoded['lastUpdated'] as int
-            : 0;
       }
     }
 

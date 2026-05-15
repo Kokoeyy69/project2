@@ -56,6 +56,7 @@ dependencies:
 
   # Environment configuration and API key security
   envied: ^1.0.1
+  firebase_app_check: ^0.3.2+10
 
 dev_dependencies:
   flutter_test:    # CRITICAL: Required for Flutter project testing - DO NOT REMOVE

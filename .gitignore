@@ -51,4 +51,6 @@ app.*.map.json
 # neopay
 neopay-api/
 env.json
-env.json
+.env*
+*.g.dart
+*.freezed.dart

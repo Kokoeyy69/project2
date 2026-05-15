@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:neopay_ai/presentation/home_screen/widgets/recent_transactions_widget.dart';
 import 'package:neopay_ai/widgets/status_badge_widget.dart';
-import 'package:neopay_ai/repositories/mock_transactions_repository.dart';
 
 void main() {
   testWidgets('Shows cached transactions when available (disableNetwork)', (

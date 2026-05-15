@@ -152,9 +152,7 @@ void main() {
     tester,
   ) async {
     // Ensure a large enough test viewport to avoid avatar overlay overflow
-    final binding =
-        TestWidgetsFlutterBinding.ensureInitialized()
-            as TestWidgetsFlutterBinding;
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
     binding.window.physicalSizeTestValue = const Size(1080, 1920);
     binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(() {
@@ -184,9 +182,7 @@ void main() {
       photoUrl: '',
     );
 
-    final binding =
-        TestWidgetsFlutterBinding.ensureInitialized()
-            as TestWidgetsFlutterBinding;
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
     binding.window.physicalSizeTestValue = const Size(1080, 1920);
     binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(() {

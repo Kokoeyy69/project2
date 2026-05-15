@@ -26,46 +26,12 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance;
 
-  String _getTimeAgo(Timestamp? timestamp) {
-    if (timestamp == null) return 'Just now';
-    final diff = DateTime.now().difference(timestamp.toDate());
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
-  String _formatAmount(num? amountNum, String? currency) {
-    final amountVal = (amountNum ?? 0).toDouble();
-    String amountStr = amountVal
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-        );
-    String prefix = currency == 'USD'
-        ? '\$'
-        : (currency == 'CNY' ? '¥ ' : 'Rp ');
-    return '- $prefix$amountStr';
-  }
-
   TransactionModel _buildTransactionModel(
     String docId,
     Map<String, dynamic> data,
   ) {
-    return TransactionModel(
-      id: docId,
-      merchantName: data['recipientName'] ?? 'Unknown',
-      category: data['type'] == 'transfer_out' ? 'Transfer Out' : 'Transaction',
-      amount: _formatAmount(data['amount'] as num?, data['currency']),
-      currency: data['currency'] ?? 'IDR',
-      time: _getTimeAgo(data['timestamp'] as Timestamp?),
-      isDebit: true,
-      status: TransactionModel.statusFromString(data['status'] ?? 'completed'),
-      categoryIcon: Icons.swap_horiz_rounded,
-      categoryColor: const Color(0xFF3B82F6),
-      recipientNote: data['note'] as String?,
-    );
+    // Use the model's factory constructor which handles dynamic name resolution
+    return TransactionModel.fromMap(data);
   }
 
   @override
@@ -81,7 +47,10 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
     try {
       Query query = _firestore
           .collection('transactions')
-          .where('userId', isEqualTo: user.uid)
+          .where(Filter.or(
+            Filter('sender_uid', isEqualTo: user.uid),
+            Filter('recipient_uid', isEqualTo: user.uid),
+          ))
           .orderBy('timestamp', descending: true)
           .limit(pageSize);
 
@@ -115,21 +84,41 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
   Stream<TransactionModel> watchTopTransaction() {
     final user = _auth.currentUser;
     if (user == null) {
+      debugPrint('watchTopTransaction: No user logged in, returning empty stream');
       return Stream.empty();
     }
 
+    debugPrint('watchTopTransaction: Watching for user ${user.uid}');
     return _firestore
         .collection('transactions')
-        .where('userId', isEqualTo: user.uid)
+        .where(Filter.or(
+          Filter('sender_uid', isEqualTo: user.uid),
+          Filter('recipient_uid', isEqualTo: user.uid),
+        ))
         .orderBy('timestamp', descending: true)
         .limit(1)
         .snapshots()
-        .where((snap) => snap.docs.isNotEmpty)
-        .map((snap) {
-          final doc = snap.docs.first;
-          final data = doc.data() as Map<String, dynamic>;
-          return _buildTransactionModel(doc.id, data);
-        });
+        .map((snapshot) {
+          debugPrint('watchTopTransaction: Received snapshot with ${snapshot.docs.length} docs');
+          if (snapshot.docs.isEmpty) {
+            debugPrint('watchTopTransaction: No documents in snapshot');
+            return <TransactionModel>[];
+          }
+          final doc = snapshot.docs.first;
+          final data = doc.data();
+          debugPrint('watchTopTransaction: Building model for doc ${doc.id}');
+          try {
+            final model = _buildTransactionModel(doc.id, data);
+            debugPrint('watchTopTransaction: Successfully built model - merchant: ${model.merchantName}, amount: ${model.amount}');
+            return [model];
+          } catch (e, stackTrace) {
+            debugPrint('watchTopTransaction: Error building model: $e');
+            debugPrint('watchTopTransaction: Stack trace: $stackTrace');
+            debugPrint('watchTopTransaction: Document data: $data');
+            return <TransactionModel>[];
+          }
+        })
+        .expand((models) => models);
   }
 
   @override
@@ -168,7 +157,7 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
       }
 
       return list
-          .map((e) => TransactionModel.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => TransactionModel.fromJson(e))
           .toList();
     } catch (_) {
       return [];

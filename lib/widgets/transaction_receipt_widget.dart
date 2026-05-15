@@ -1,10 +1,5 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 
@@ -39,53 +34,6 @@ class TransactionReceiptWidget extends StatefulWidget {
 }
 
 class _TransactionReceiptWidgetState extends State<TransactionReceiptWidget> {
-  final ScreenshotController _screenshotController = ScreenshotController();
-
-  Future<void> _captureAndShare() async {
-    try {
-      // Capture the receipt as an image
-      final Uint8List? imageBytes = await _screenshotController.capture(
-        delay: const Duration(milliseconds: 10),
-        pixelRatio: 2.0,
-      );
-
-      if (imageBytes == null) return;
-
-      // Save to temporary directory
-      final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/neopay_receipt_${widget.transactionId}.png';
-      final file = File(filePath);
-      await file.writeAsBytes(imageBytes);
-
-      // Share the file
-      final result = await Share.shareXFiles(
-        [XFile(filePath)],
-        subject: 'NeoPay Receipt - ${widget.transactionId}',
-        text: 'Transaction Receipt from NeoPay',
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.status == ShareResultStatus.success
-                ? '✅ Receipt shared successfully!'
-                : 'Receipt sharing completed'),
-            backgroundColor: result.status == ShareResultStatus.success ? Colors.green : Colors.blue,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Failed to share receipt: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   String get _formattedAmount {
     final formatter = NumberFormat.currency(
       locale: 'id_ID',
@@ -100,9 +48,7 @@ class _TransactionReceiptWidgetState extends State<TransactionReceiptWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Screenshot(
-      controller: _screenshotController,
-      child: Container(
+    return Container(
         width: 340,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -257,8 +203,7 @@ class _TransactionReceiptWidgetState extends State<TransactionReceiptWidget> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildDetailRow(String label, String value) {

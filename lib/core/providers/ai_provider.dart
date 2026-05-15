@@ -4,6 +4,7 @@ import 'package:neopay_ai/core/services/gemini_ai_service.dart';
 import 'package:neopay_ai/core/services/exchange_rate_model.dart';
 import 'package:neopay_ai/core/services/security_service.dart';
 import 'package:neopay_ai/services/hive_cache_service.dart';
+import '../config/env.dart';
 
 /// Provider for AI chat functionality with transfer intent detection
 /// 
@@ -52,7 +53,7 @@ class AIProvider extends ChangeNotifier {
       final cachedKey = HiveCacheService.get('gemini_api_key') as String?;
       final apiKey = cachedKey?.isNotEmpty == true
           ? cachedKey
-          : const String.fromEnvironment('GEMINI_API_KEY');
+          : Env.geminiApiKey;
       await _aiService.init(apiKey: apiKey);
       _isInitialized = true;
       notifyListeners();

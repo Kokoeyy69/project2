@@ -77,9 +77,9 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
             .where((doc) => doc.id != currentUid) // Exclude self
             .map((doc) => {
                   'id': doc.id,
-                  'name': doc.data()?['name'] ?? 'Unknown',
-                  'email': doc.data()?['email'] ?? '',
-                  'avatar': doc.data()?['avatar'] ?? '',
+                  'name': doc.data()['name'] ?? 'Unknown',
+                  'email': doc.data()['email'] ?? '',
+                  'avatar': doc.data()['avatar'] ?? '',
                 })
             .toList();
         _isSearching = false;

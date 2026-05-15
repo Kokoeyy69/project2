@@ -14,7 +14,6 @@ import '../presentation/profile_screen/profile_screen.dart';
 import '../presentation/onboarding_screen/onboarding_screen.dart';
 import '../presentation/ai_chat/ai_chat_screen.dart';
 import '../presentation/ai_assistant/ai_chat_screen.dart';
-import '../presentation/security/pin_entry_screen.dart';
 import '../presentation/security/reset_pin_screen.dart';
 import '../presentation/ocr/ocr_scanner_screen.dart';
 import '../presentation/analytics/analytics_screen.dart';

@@ -26,7 +26,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _isFetchingRecipient = false;
   Map<String, dynamic>? _recipientData;
   String? _recipientUid;
-  double? _transferAmount;
 
   @override
   void dispose() {
@@ -264,10 +263,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
       // Action 3: Create transaction log
       final trxRef = FirebaseFirestore.instance.collection('transactions').doc();
       batch.set(trxRef, {
-        'sender_uid': currentUid,
-        'recipient_uid': _recipientUid,
-        'recipient_name': _recipientData?['name'] ?? 'User',
-        'sender_name': FirebaseAuth.instance.currentUser?.displayName ?? 'User',
+        'senderUid': currentUid,
+        'recipientUid': _recipientUid,
+        'recipientName': _recipientData?['name'] ?? 'User',
+        'senderName': FirebaseAuth.instance.currentUser?.displayName ?? 'User',
         'amount': amount,
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'p2p_transfer',

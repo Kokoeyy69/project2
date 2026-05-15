@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'env.dart';
 
 /// Represents the current application flavor/environment
 enum Flavor { dev, staging, prod }
@@ -39,7 +40,7 @@ class FlavorHelper {
         return FlavorConfig(
           flavor: Flavor.dev,
           appName: 'NeoPay AI (Dev)',
-          apiBaseUrl: 'https://neopay-api-eight.vercel.app',
+          apiBaseUrl: Env.apiBaseUrl,
           enableDebugLogging: true,
           enableAnalytics: false,
           enableCrashlytics: false,
@@ -48,7 +49,7 @@ class FlavorHelper {
         return FlavorConfig(
           flavor: Flavor.staging,
           appName: 'NeoPay AI (Staging)',
-          apiBaseUrl: 'https://neopay-api-eight.vercel.app',
+          apiBaseUrl: Env.apiBaseUrl,
           enableDebugLogging: true,
           enableAnalytics: true,
           enableCrashlytics: false,
@@ -57,7 +58,7 @@ class FlavorHelper {
         return FlavorConfig(
           flavor: Flavor.prod,
           appName: 'NeoPay AI',
-          apiBaseUrl: 'https://neopay-api-eight.vercel.app',
+          apiBaseUrl: Env.apiBaseUrl,
           enableDebugLogging: false,
           enableAnalytics: true,
           enableCrashlytics: true,

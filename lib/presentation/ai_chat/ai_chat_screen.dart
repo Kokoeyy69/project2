@@ -146,9 +146,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                             // C. Record Transaction Receipt
                             final DocumentReference trxRef = FirebaseFirestore.instance.collection('transactions').doc();
                             batch.set(trxRef, {
-                              'sender_uid': senderUid,
-                              'recipient_uid': recipientUid,
-                              'recipient_name': recipient,
+                              'senderUid': senderUid,
+                              'recipientUid': recipientUid,
+                              'recipientName': recipient,
                               'amount': amount,
                               'timestamp': FieldValue.serverTimestamp(),
                               'type': 'p2p_transfer',
