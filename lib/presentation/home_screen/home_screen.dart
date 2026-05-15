@@ -9,6 +9,7 @@ import './widgets/home_header_widget.dart';
 import './widgets/quick_actions_grid_widget.dart';
 import './widgets/recent_transactions_widget.dart';
 import './widgets/wallet_card_carousel_widget.dart';
+import './widgets/ai_insight_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -92,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onCardChanged: _onCardChanged,
                       ),
                     ),
+                    const SliverToBoxAdapter(child: AiInsightCard()),
                     const SliverToBoxAdapter(child: AiCommandBarWidget()),
                     SliverToBoxAdapter(
                       child: QuickActionsGridWidget(

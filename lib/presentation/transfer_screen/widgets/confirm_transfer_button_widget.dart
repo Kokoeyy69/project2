@@ -124,7 +124,7 @@ class _ConfirmTransferButtonWidgetState extends State<ConfirmTransferButtonWidge
         return;
       }
     } catch (e) {
-      debugPrint('[ConfirmTransfer] Balance pre-check error: $e');
+      debugPrint('Balance pre-check error: $e');
     }
 
     _showConfirmationDialog();
@@ -347,7 +347,7 @@ class _ConfirmTransferButtonWidgetState extends State<ConfirmTransferButtonWidge
                     }
                   }
                 } catch (e) {
-                  debugPrint('[ConfirmTransfer] Transfer failed: $e');
+                  debugPrint('Transfer failed: $e');
                   if (!mounted) return;
                   setState(() => _isLoading = false);
                   String errorMsg = 'Transfer failed. Please try again.';

@@ -222,6 +222,24 @@ class SecurityService {
     return _isAuthenticated;
   }
 
+  /// Change transaction PIN (requires current PIN verification)
+  Future<bool> changeTransactionPin(String currentPin, String newPin) async {
+    // Verify current PIN first
+    final currentPinValid = await verifyTransactionPin(currentPin);
+    if (!currentPinValid) {
+      return false;
+    }
+
+    // Validate new PIN
+    if (newPin.length != 6 || !RegExp(r'^[0-9]+$').hasMatch(newPin)) {
+      throw Exception('New PIN must be exactly 6 digits');
+    }
+
+    // Set the new PIN (this will generate new salt and hash)
+    await setTransactionPin(newPin);
+    return true;
+  }
+
   /// Clear PIN (emergency reset)
   Future<void> clearTransactionPin() async {
     await _secureStorage.delete(key: _pinHashKey);

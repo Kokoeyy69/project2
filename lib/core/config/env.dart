@@ -27,4 +27,12 @@ abstract class Env {
   /// Current flavor name (dev, staging, prod)
   @EnviedField(varName: 'FLAVOR_NAME', obfuscate: false)
   static const String flavorName = _Env.flavorName;
+
+  /// Base URL for the NeoPay API
+  @EnviedField(varName: 'API_BASE_URL', obfuscate: false)
+  static const String apiBaseUrl = _Env.apiBaseUrl;
+
+  /// API Key for NeoPay backend authentication
+  @EnviedField(varName: 'NEOPAY_API_KEY', obfuscate: true)
+  static final String neopayApiKey = _Env.neopayApiKey;
 }

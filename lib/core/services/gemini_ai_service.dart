@@ -147,13 +147,8 @@ class GeminiAiService {
   Future<void> init({String? apiKey}) async {
     if (_isInitialized) return;
 
-    // Priority: 1. Provided apiKey, 2. Env.obfuscated key, 3. String.fromEnvironment
+    // Priority: Provided apiKey, then Env.obfuscated key
     _apiKey = apiKey ?? Env.geminiApiKey;
-    
-    // Fallback to compile-time constant if Env fails
-    if (_apiKey == null || _apiKey!.isEmpty) {
-      _apiKey = const String.fromEnvironment('GEMINI_API_KEY');
-    }
     
     if (_apiKey == null || _apiKey!.isEmpty) {
       debugPrint('[GeminiAiService] No API key provided, AI features will be limited');
@@ -347,6 +342,28 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
     }
 
     return 'Oke, siap! Mau kirim ${symbol}${intent.amount.toStringAsFixed(0)} ${intent.currency} ke ${intent.recipientName}.\n\nLanjut transfer?';
+  }
+
+  /// Analyze recent transactions and return a short financial insight
+  Future<String> analyzeTransactions(List<Map<String, dynamic>> recentTransactions) async {
+    if (!_isInitialized || _model == null) {
+      return 'Wah, lagi error nih. Tapi tetap pantau pengeluaran lo ya!';
+    }
+    
+    try {
+      if (recentTransactions.isEmpty) {
+        return 'Belum ada transaksi bulan ini. Yuk mulai kelola keuangan lu!';
+      }
+      
+      final summary = recentTransactions.map((t) => '${t['type']}: ${t['amount']} ${t['currency']}').join(', ');
+      final prompt = 'Ini transaksi terakhir gua: $summary. Berikan satu tips keuangan yang sangat singkat, friendly, dan menggunakan bahasa gaul (seperti lu/gua). Maksimal 2 kalimat pendek tanpa markdown atau bold.';
+      
+      final response = await _model!.generateContent([Content.text(prompt)]);
+      return response.text?.trim() ?? 'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
+    } catch (e) {
+      debugPrint('[GeminiAiService] Insight error: $e');
+      return 'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
+    }
   }
 
   /// Check if the service is ready

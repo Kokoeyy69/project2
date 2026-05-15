@@ -24,6 +24,10 @@ class TransactionModel {
   final IconData categoryIcon;
   final Color categoryColor;
   final String? recipientNote;
+  final String senderName;
+  final String recipientName;
+  final String senderUid;
+  final String recipientUid;
 
   const TransactionModel({
     required this.id,
@@ -37,21 +41,41 @@ class TransactionModel {
     required this.categoryIcon,
     required this.categoryColor,
     this.recipientNote,
+    this.senderName = 'Unknown',
+    this.recipientName = 'Unknown',
+    this.senderUid = '',
+    this.recipientUid = '',
   });
 
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
+    // Get current user's UID
+    final String currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    // Safely extract names and UIDs
+    final String senderName = (map['senderName'] ?? map['sender_name'] ?? 'Unknown').toString();
+    final String recipientName = (map['recipientName'] ?? map['recipient_name'] ?? 'Unknown').toString();
+    final String senderUid = (map['sender_uid'] ?? map['senderUid'] ?? '').toString();
+    final String recipientUid = (map['recipient_uid'] ?? map['recipientUid'] ?? '').toString();
+    
+    // Determine dynamic display name based on current user's role
+    final String resolvedMerchantName = (currentUid == senderUid) ? recipientName : senderName;
+    
     return TransactionModel(
-      id: map['id'] as String,
-      merchantName: map['merchantName'] as String,
-      category: map['category'] as String,
-      amount: map['amount'] as String,
-      currency: map['currency'] as String,
-      time: map['time'] as String,
-      isDebit: map['isDebit'] as bool,
-      status: statusFromString(map['status'] as String),
-      categoryIcon: iconFromString(map['categoryIcon'] as String),
-      categoryColor: Color(map['categoryColor'] as int),
+      id: (map['id'] as String?) ?? '',
+      merchantName: resolvedMerchantName,
+      category: (map['category'] as String?) ?? 'Transaction',
+      amount: _safeParseAmount(map['amount']),
+      currency: (map['currency'] as String?) ?? 'IDR',
+      time: (map['time'] as String?) ?? 'Just now',
+      isDebit: (map['isDebit'] as bool?) ?? true,
+      status: statusFromString(map['status'] as String?),
+      categoryIcon: iconFromString(map['categoryIcon'] as String?),
+      categoryColor: Color((map['categoryColor'] as num?)?.toInt() ?? 0xFF3B82F6),
       recipientNote: map['recipientNote'] as String?,
+      senderName: senderName,
+      recipientName: recipientName,
+      senderUid: senderUid,
+      recipientUid: recipientUid,
     );
   }
 
@@ -76,22 +100,39 @@ class TransactionModel {
     final icon = iconCode != null
         ? IconData(iconCode, fontFamily: 'MaterialIcons')
         : Icons.receipt_outlined;
+    
+    // Get current user's UID
+    final String currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    // Safely extract names and UIDs
+    final String senderName = (json['senderName'] ?? json['sender_name'] ?? 'Unknown').toString();
+    final String recipientName = (json['recipientName'] ?? json['recipient_name'] ?? 'Unknown').toString();
+    final String senderUid = (json['sender_uid'] ?? json['senderUid'] ?? '').toString();
+    final String recipientUid = (json['recipient_uid'] ?? json['recipientUid'] ?? '').toString();
+    
+    // Determine dynamic display name based on current user's role
+    final String resolvedMerchantName = (currentUid == senderUid) ? recipientName : senderName;
+    
     return TransactionModel(
-      id: json['id'] as String,
-      merchantName: json['merchantName'] as String,
-      category: json['category'] as String,
-      amount: json['amount'] as String,
-      currency: json['currency'] as String,
-      time: json['time'] as String,
-      isDebit: json['isDebit'] as bool,
-      status: statusFromString(json['status'] as String),
+      id: (json['id'] as String?) ?? '',
+      merchantName: resolvedMerchantName,
+      category: (json['category'] as String?) ?? 'Transaction',
+      amount: _safeParseAmount(json['amount']),
+      currency: (json['currency'] as String?) ?? 'IDR',
+      time: (json['time'] as String?) ?? 'Just now',
+      isDebit: (json['isDebit'] as bool?) ?? true,
+      status: statusFromString(json['status'] as String?),
       categoryIcon: icon,
-      categoryColor: Color(json['categoryColor'] as int),
+      categoryColor: Color((json['categoryColor'] as num?)?.toInt() ?? 0xFF3B82F6),
       recipientNote: json['recipientNote'] as String?,
+      senderName: senderName,
+      recipientName: recipientName,
+      senderUid: senderUid,
+      recipientUid: recipientUid,
     );
   }
 
-  static TransactionStatus statusFromString(String v) {
+  static TransactionStatus statusFromString(String? v) {
     switch (v) {
       case 'completed':
         return TransactionStatus.completed;
@@ -123,7 +164,20 @@ class TransactionModel {
     }
   }
 
-  static IconData iconFromString(String v) {
+  /// Safely parse amount from various types (String, int, double, num)
+  static String _safeParseAmount(dynamic value) {
+    if (value == null) return 'Rp 0';
+    if (value is String) return value;
+    if (value is num) {
+      final amountVal = value.toDouble();
+      return amountVal
+          .toStringAsFixed(0)
+          .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    }
+    return 'Rp 0';
+  }
+
+  static IconData iconFromString(String? v) {
     switch (v) {
       case 'shopping_bag':
         return Icons.shopping_bag_outlined;
@@ -266,11 +320,17 @@ class _RecentTransactionsWidgetState extends State<RecentTransactionsWidget> {
       }
     } catch (e) {
       _hasMore = false;
-      _errorMessage = e.toString();
-      AnalyticsService.instance.logEvent(
-        'recent_transactions_error',
-        params: {'error': _errorMessage},
-      );
+      final errorStr = e.toString();
+      if (errorStr.contains('permission-denied') || errorStr.contains('PERMISSION_DENIED')) {
+        // Silently treat permission errors as 'no data' to avoid scary red screens for new/restricted users
+        _errorMessage = null;
+      } else {
+        _errorMessage = errorStr;
+        AnalyticsService.instance.logEvent(
+          'recent_transactions_error',
+          params: {'error': _errorMessage},
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -515,11 +575,29 @@ class _TransactionItem extends StatelessWidget {
 
   const _TransactionItem({required this.transaction});
 
+  /// Get the display name based on current user's role in the transaction
+  String _getDisplayName() {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return transaction.merchantName;
+    
+    // If current user is the sender, show recipient name
+    if (currentUid == transaction.senderUid) {
+      return transaction.recipientName;
+    }
+    // If current user is the recipient, show sender name
+    if (currentUid == transaction.recipientUid) {
+      return transaction.senderName;
+    }
+    // Fallback to merchant name
+    return transaction.merchantName;
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusLabel = TransactionModel.statusToString(transaction.status);
+    final displayName = _getDisplayName();
     final semanticsLabel =
-        'Transaction ${transaction.merchantName}, ${transaction.amount}, status $statusLabel';
+        'Transaction $displayName, ${transaction.amount}, status $statusLabel';
 
     return Semantics(
       label: semanticsLabel,
@@ -555,7 +633,7 @@ class _TransactionItem extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transaction.merchantName,
+                      displayName,
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

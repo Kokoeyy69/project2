@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../core/config/env.dart';
-
+import '../core/config/app_flavor.dart';
 /// API response model
 class ApiResponse<T> {
   final bool success;
@@ -71,15 +71,11 @@ class ApiService {
 
   final Dio _dio = Dio();
 
-  // Updated Vercel URL - change this to your deployed URL
-  static const String _apiBaseUrl = String.fromEnvironment(
-    'NEOPAY_API_URL',
-    defaultValue: 'https://neopay-api-eight.vercel.app',
-  );
-  static const String _apiKey = String.fromEnvironment(
-    'NEOPAY_API_KEY',
-    defaultValue: 'neopay-secure-key-2024',
-  );
+  // Dynamic API URL from Flavor Config
+  static String get _apiBaseUrl => FlavorHelper.config.apiBaseUrl;
+  
+  // Secure API key from Env configuration
+  static final String _apiKey = Env.neopayApiKey;
 
   /// Callback for cold start processing
   OnProcessingCallback? onProcessing;

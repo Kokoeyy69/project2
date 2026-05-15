@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../services/hive_cache_service.dart';
 import '../../core/services/security_service.dart';
 import '../security/create_pin_screen.dart';
 import '../security/verify_pin_screen.dart';
@@ -731,10 +732,35 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
   }
 
   Widget _buildConvertSendButton() {
-    final isReady = _amount.isNotEmpty && _selectedContactId != null && !_isTransferLoading;
-    return GestureDetector(
-      onTap: isReady ? _onConvertAndSend : null,
-      child: AnimatedContainer(
+    final val = double.tryParse(_amount) ?? 0;
+    
+    final currentBalance = HiveCacheService.getCachedBalance() ?? 0.0;
+    double amountInIdr = val;
+    if (_selectedCurrency != 'IDR') {
+      final rateKey = '${_selectedCurrency}_IDR';
+      amountInIdr = val * (_rates[rateKey] ?? 1.0);
+    }
+    
+    final isInsufficient = val > 0 && amountInIdr > currentBalance;
+    final isReady = _amount.isNotEmpty && _selectedContactId != null && !_isTransferLoading && !isInsufficient;
+    
+    return Column(
+      children: [
+        if (isInsufficient)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Saldo tidak mencukupi',
+              style: GoogleFonts.inter(
+                color: AppTheme.error,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        GestureDetector(
+          onTap: isReady ? _onConvertAndSend : null,
+          child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -792,7 +818,9 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
             ),
           ],
         ),
-      ),
+        ),
+        ),
+      ],
     );
   }
 }

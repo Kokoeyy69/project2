@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../theme/app_theme.dart';
 import '../transfer_view_model.dart';
+import '../../../services/hive_cache_service.dart';
 
 class AmountInputWidget extends StatelessWidget {
   final int selectedWalletIndex;
@@ -71,10 +72,36 @@ class AmountInputWidget extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              _buildBalanceWarning(context, transferViewModel),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildBalanceWarning(BuildContext context, TransferViewModel vm) {
+    final cachedBalance = HiveCacheService.getCachedBalance() ?? 0.0;
+    
+    // Convert current amount to IDR if it's not already
+    double amountInIdr = vm.numericAmount;
+    if (selectedWalletIndex == 1) { // USD
+      amountInIdr *= 15000; // Mock rate for validation
+    } else if (selectedWalletIndex == 2) { // CNY
+      amountInIdr *= 2100; // Mock rate for validation
+    }
+    
+    if (vm.numericAmount > 0 && amountInIdr > cachedBalance) {
+      return Text(
+        'Saldo tidak mencukupi',
+        style: GoogleFonts.inter(
+          color: AppTheme.error,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }

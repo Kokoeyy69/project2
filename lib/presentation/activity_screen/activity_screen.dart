@@ -114,7 +114,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
         for (var doc in snapshot.docs) {
           if (!existingIds.contains(doc.id)) {
             final data = doc.data() as Map<String, dynamic>;
-            final bool isExpense = data['sender_uid'] == currentUid;
+            
+            // Extract names and UIDs safely
+            final String senderName = (data['senderName'] ?? data['sender_name'] ?? 'Pengguna').toString();
+            final String recipientName = (data['recipientName'] ?? data['recipient_name'] ?? 'Pengguna').toString();
+            final String senderUid = (data['sender_uid'] ?? data['senderUid'] ?? '').toString();
+            
+            // Determine display name based on current user's role
+            final String displayName = (currentUid == senderUid) ? recipientName : senderName;
+            
+            final bool isExpense = data['senderUid'] == currentUid || data['sender_uid'] == currentUid;
             final double amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
             final String currency = data['currency'] ?? 'IDR';
             final Timestamp? ts = data['timestamp'] as Timestamp?;
@@ -129,8 +138,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
               'id': doc.id,
               'date': DateFormat('MMM d').format(dt),
               'name': isExpense
-                  ? 'Transfer ke ${data['recipient_name'] ?? 'Pengguna'}'
-                  : 'Terima dari ${data['sender_name'] ?? 'Pengguna'}',
+                  ? 'Transfer ke $recipientName'
+                  : 'Terima dari $senderName',
               'category': 'Transfer',
               'amount': '${isExpense ? '-' : '+'} $currencyPrefix$amountStr',
               'amountSign': isExpense ? -1 : 1,
@@ -154,7 +163,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           _hasError = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('ActivityScreen: Error fetching transactions: $e');
+      debugPrint('ActivityScreen: Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -169,7 +180,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _calculateStats() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final String currentUid = user.uid;
 
     double tempIncome = 0.0;
     double tempExpense = 0.0;
@@ -178,11 +188,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     double totalCatExpense = 0.0;
 
     DateTime now = DateTime.now();
-    int currentWeekday = now.weekday;
-    DateTime startOfWeek = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: currentWeekday - 1));
-    DateTime endOfWeek = startOfWeek.add(
-        const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
 
     for (var t in _transactions) {
       final bool isExpense = t['amountSign'] == -1;
@@ -196,8 +201,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         catTotals['Transfer'] = (catTotals['Transfer'] ?? 0.0) + amountVal;
         totalCatExpense += amountVal;
 
-        // Parse date and check if in current week
-        final dateStr = t['date'] as String;
         // Simple approximation for weekly chart
         final dayIndex = (now.difference(DateTime(now.year, now.month, 1)).inDays) % 7;
         if (dayIndex >= 0 && dayIndex < 7) {
