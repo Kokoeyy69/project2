@@ -54,3 +54,7 @@ env.json
 .env*
 *.g.dart
 *.freezed.dart
+
+node_modules/
+package-lock.json
+package.json
