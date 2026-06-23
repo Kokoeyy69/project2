@@ -65,17 +65,11 @@ class NumericKeypadWidget extends StatelessWidget {
                 children: [
                   Expanded(
                     // Tombol titik (.) diubah jadi C (Clear)
-                    child: _KeyButton(
-                      label: 'C', 
-                      onTap: onClear,
-                    ),
+                    child: _KeyButton(label: 'C', onTap: onClear),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _KeyButton(
-                      label: '0',
-                      onTap: () => onKeyTap('0'),
-                    ),
+                    child: _KeyButton(label: '0', onTap: () => onKeyTap('0')),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -115,8 +109,10 @@ class _KeyButton extends StatelessWidget {
           color: AppTheme.surfaceVariant.withAlpha(180),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isClearBtn ? AppTheme.error.withAlpha(100) : AppTheme.glassBorder, 
-            width: 0.5
+            color: isClearBtn
+                ? AppTheme.error.withAlpha(100)
+                : AppTheme.glassBorder,
+            width: 0.5,
           ),
         ),
         alignment: Alignment.center,
@@ -129,11 +125,7 @@ class _KeyButton extends StatelessWidget {
                   color: isClearBtn ? AppTheme.error : AppTheme.textPrimary,
                 ),
               )
-            : Icon(
-                icon,
-                size: 20,
-                color: AppTheme.textPrimary,
-              ),
+            : Icon(icon, size: 20, color: AppTheme.textPrimary),
       ),
     );
   }

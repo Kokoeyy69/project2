@@ -434,17 +434,17 @@ class ProfileViewModel extends ProfileViewModelBase {
           }
         } else {
           // Social auth user: attempt verification without reauth
-        try {
-          await _user!.verifyBeforeUpdateEmail(newEmail);
-        } on FirebaseAuthException catch (e) {
-          if (e.code == 'requires-recent-login') {
-            _reauthRequired = true;
-            notifyListeners();
+          try {
+            await _user!.verifyBeforeUpdateEmail(newEmail);
+          } on FirebaseAuthException catch (e) {
+            if (e.code == 'requires-recent-login') {
+              _reauthRequired = true;
+              notifyListeners();
+            }
+            return false;
+          } catch (e) {
+            return false;
           }
-          return false;
-        } catch (e) {
-          return false;
-        }
         }
       }
 
@@ -489,7 +489,6 @@ class ProfileViewModel extends ProfileViewModelBase {
         if (!can) return false;
         final did = await _localAuth.authenticate(
           localizedReason: 'Authenticate to enable biometric login',
-          options: const AuthenticationOptions(biometricOnly: true),
         );
         if (!did) return false;
       }
@@ -557,6 +556,7 @@ class ProfileViewModel extends ProfileViewModelBase {
   /// Sign out the current user
   @override
   Future<void> signOut() async {
+    await _userDocSub?.cancel();
     await _auth.signOut();
   }
 

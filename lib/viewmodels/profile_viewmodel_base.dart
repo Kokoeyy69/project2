@@ -47,6 +47,7 @@ abstract class ProfileViewModelBase extends ChangeNotifier {
     required String newEmail,
     String? currentPassword,
   });
+
   /// Whether the last operation failed due to needing a recent reauthentication.
   bool get reauthRequired;
 

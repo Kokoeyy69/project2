@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../routes/app_routes.dart';
 
 class AppNavigation extends StatefulWidget {
   final int currentIndex;
@@ -12,6 +14,8 @@ class AppNavigation extends StatefulWidget {
     required this.currentIndex,
     required this.onTap,
   });
+
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   State<AppNavigation> createState() => _AppNavigationState();
@@ -52,11 +56,11 @@ class _AppNavigationState extends State<AppNavigation>
     _previousIndex = widget.currentIndex;
     _pillController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 300),
     );
     _pillAnimation = CurvedAnimation(
       parent: _pillController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeInOutCubic,
     );
   }
 
@@ -77,116 +81,150 @@ class _AppNavigationState extends State<AppNavigation>
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final barHeight = 64.0 + bottomPadding;
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        // Floating Navbar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: 68,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.surface.withAlpha(217),
+                borderRadius: BorderRadius.circular(50),
+                border: Border.all(color: AppTheme.glassBorder, width: 0.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.surface.withOpacity(0.3),
+                    spreadRadius: 2,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final itemWidth = constraints.maxWidth / _items.length;
+                  final qrisIndex = (_items.length / 2).floor();
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: barHeight,
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withAlpha(217),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: AppTheme.glassBorder, width: 0.5),
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 8,
-              right: 8,
-              top: 4,
-              bottom: bottomPadding,
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final itemWidth = constraints.maxWidth / _items.length;
+                  return Stack(
+                    children: [
+                      // Animated pill indicator
+                      AnimatedBuilder(
+                        animation: _pillAnimation,
+                        builder: (context, child) {
+                          final fromX = _previousIndex * itemWidth;
+                          final toX = widget.currentIndex * itemWidth;
+                          final currentX =
+                              fromX + (toX - fromX) * _pillAnimation.value;
 
-                return Stack(
-                  children: [
-                    // Animated pill indicator
-                    AnimatedBuilder(
-                      animation: _pillAnimation,
-                      builder: (context, child) {
-                        final fromX = _previousIndex * itemWidth + 12;
-                        final toX = widget.currentIndex * itemWidth + 12;
-                        final currentX =
-                            fromX + (toX - fromX) * _pillAnimation.value;
-
-                        return Positioned(
-                          left: currentX,
-                          top: 8,
-                          child: Container(
-                            width: itemWidth - 24,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryMuted,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: AppTheme.primary.withAlpha(102),
-                                width: 0.5,
+                          return Positioned(
+                            left: currentX,
+                            top: 8,
+                            child: Container(
+                              width: itemWidth,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryMuted,
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: AppTheme.primary.withAlpha(102),
+                                  width: 0.5,
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    // Nav items
-                    Row(
-                      children: List.generate(_items.length, (index) {
-                        final isActive = index == widget.currentIndex;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () => widget.onTap(index),
-                            behavior: HitTestBehavior.opaque,
-                            child: SizedBox(
-                              height: 64,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    child: Icon(
-                                      isActive
-                                          ? _items[index].activeIcon
-                                          : _items[index].icon,
-                                      key: ValueKey('$index-$isActive'),
-                                      size: 22,
-                                      color: isActive
-                                          ? AppTheme.primary
-                                          : AppTheme.textMuted,
-                                    ),
+                          );
+                        },
+                      ),
+                      // Nav items
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: List.generate(_items.length, (index) {
+                          final isActive = index == widget.currentIndex;
+                          final isQrisPosition = index == qrisIndex;
+
+                          if (isQrisPosition) {
+                            return SizedBox(
+                                width: itemWidth); // Placeholder for QRIS FAB
+                          }
+
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                widget.onTap(index);
+                              },
+                              behavior: HitTestBehavior.opaque,
+                              child: Semantics(
+                                label: _items[index].label,
+                                child: Tooltip(
+                                  message: _items[index].label,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      AnimatedSwitcher(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        child: Icon(
+                                          isActive
+                                              ? _items[index].activeIcon
+                                              : _items[index].icon,
+                                          key: ValueKey('$index-$isActive'),
+                                          size: 24,
+                                          color: isActive
+                                              ? AppTheme.primary
+                                              : AppTheme.textMuted,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      AnimatedDefaultTextStyle(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: isActive
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: isActive
+                                              ? AppTheme.primary
+                                              : AppTheme.textMuted,
+                                        ),
+                                        child: Text(_items[index].label),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 3),
-                                  AnimatedDefaultTextStyle(
-                                    duration: const Duration(milliseconds: 200),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      fontWeight: isActive
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                      color: isActive
-                                          ? AppTheme.primary
-                                          : AppTheme.textMuted,
-                                    ),
-                                    child: Text(_items[index].label),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ],
-                );
-              },
+                          );
+                        }),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
-      ),
+        // QRIS FAB
+        Transform.translate(
+          offset: const Offset(0, -15),
+          child: FloatingActionButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pushNamed(context, AppRoutes.ocrScannerScreen);
+            },
+            backgroundColor: AppTheme.primary,
+            shape: const CircleBorder(),
+            elevation: 8,
+            highlightElevation: 12,
+            child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 28),
+          ),
+        ),
+      ],
     );
   }
 }

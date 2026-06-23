@@ -4,12 +4,12 @@ import 'package:neopay_ai/core/services/currency_service.dart';
 import 'package:neopay_ai/core/services/exchange_rate_model.dart';
 
 /// Provider for currency conversion and formatting
-/// 
+///
 /// This provider manages exchange rates and provides methods for:
 /// - Converting between currencies
 /// - Formatting currency values for display
 /// - Tracking loading and error states
-/// 
+///
 /// Usage in widgets:
 /// ```dart
 /// final currencyProvider = context.watch<CurrencyProvider>();
@@ -31,7 +31,7 @@ class CurrencyProvider extends ChangeNotifier {
   bool get hasError => _hasError;
   String? get errorMessage => _errorMessage;
   DateTime? get lastFetchedAt => _lastFetchedAt;
-  
+
   /// Check if rates are available
   bool get hasRates => _rates.rates.isNotEmpty;
 
@@ -55,7 +55,9 @@ class CurrencyProvider extends ChangeNotifier {
     }
     final age = DateTime.now().difference(_lastFetchedAt!);
     if (age > const Duration(hours: 12)) {
-      debugPrint('[CurrencyProvider] Rates stale (${age.inHours}h), refreshing...');
+      debugPrint(
+        '[CurrencyProvider] Rates stale (${age.inHours}h), refreshing...',
+      );
       await fetchRates(forceRefresh: true);
     }
   }
@@ -69,10 +71,14 @@ class CurrencyProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _rates = await _currencyService.fetchLatestRates(forceRefresh: forceRefresh);
+      _rates = await _currencyService.fetchLatestRates(
+        forceRefresh: forceRefresh,
+      );
       _lastFetchedAt = DateTime.now();
       _isLoading = false;
-      debugPrint('[CurrencyProvider] Rates updated: ${_rates.rates.length} currencies');
+      debugPrint(
+        '[CurrencyProvider] Rates updated: ${_rates.rates.length} currencies',
+      );
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
@@ -80,9 +86,9 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   /// Convert amount from one currency to another
-  /// 
+  ///
   /// Returns the converted amount, or the original amount if conversion is not possible
-  /// 
+  ///
   /// Example:
   /// ```dart
   /// // Convert 100 USD to IDR
@@ -110,20 +116,24 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   /// Format a currency value for display
-  /// 
+  ///
   /// Uses the intl package for proper locale-aware formatting
-  /// 
+  ///
   /// Example:
   /// ```dart
   /// provider.formatCurrency(1500000, 'IDR') // Returns "Rp 1.500.000"
   /// provider.formatCurrency(99.99, 'USD')   // Returns "$99.99"
   /// ```
-  String formatCurrency(double value, String currencyCode, {int? decimalDigits}) {
+  String formatCurrency(
+    double value,
+    String currencyCode, {
+    int? decimalDigits,
+  }) {
     final symbol = SupportedCurrencies.getSymbol(currencyCode);
-    
+
     // Determine decimal digits based on currency if not specified
     final digits = decimalDigits ?? _getDefaultDecimalDigits(currencyCode);
-    
+
     try {
       final format = NumberFormat.currency(
         symbol: symbol,
@@ -138,12 +148,16 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   /// Format with custom pattern
-  /// 
+  ///
   /// Example:
   /// ```dart
   /// provider.formatCurrencyCustom(1500000, 'IDR', '#,##0.00')
   /// ```
-  String formatCurrencyCustom(double value, String currencyCode, String pattern) {
+  String formatCurrencyCustom(
+    double value,
+    String currencyCode,
+    String pattern,
+  ) {
     final symbol = SupportedCurrencies.getSymbol(currencyCode);
     try {
       final format = NumberFormat(pattern, _getLocaleForCurrency(currencyCode));
@@ -156,7 +170,7 @@ class CurrencyProvider extends ChangeNotifier {
   /// Get a short formatted version (e.g., "1.5M" for millions)
   String formatCurrencyShort(double value, String currencyCode) {
     final symbol = SupportedCurrencies.getSymbol(currencyCode);
-    
+
     if (value >= 1000000000) {
       return '$symbol${(value / 1000000000).toStringAsFixed(1)}B';
     } else if (value >= 1000000) {
@@ -164,17 +178,17 @@ class CurrencyProvider extends ChangeNotifier {
     } else if (value >= 1000) {
       return '$symbol${(value / 1000).toStringAsFixed(1)}K';
     }
-    
+
     return formatCurrency(value, currencyCode);
   }
 
   /// Get exchange rate as a formatted string
   String formatRate(String from, String to) {
     if (from == to) return '1.00';
-    
+
     final rate = getRate(from, to);
     if (rate == null) return 'N/A';
-    
+
     if (rate >= 1000) {
       return '1 $from = ${rate.toStringAsFixed(2)} $to';
     } else if (rate >= 1) {
@@ -227,11 +241,11 @@ class CurrencyProvider extends ChangeNotifier {
   int _getDefaultDecimalDigits(String currencyCode) {
     // Currencies with 0 decimal places (typically high-value currencies)
     const zeroDecimalCurrencies = ['IDR', 'JPY', 'KRW', 'VND', 'LAK', 'KHR'];
-    
+
     if (zeroDecimalCurrencies.contains(currencyCode)) {
       return 0;
     }
-    
+
     // Most currencies use 2 decimal places
     return 2;
   }
@@ -239,27 +253,48 @@ class CurrencyProvider extends ChangeNotifier {
   /// Get locale for currency formatting
   String _getLocaleForCurrency(String currencyCode) {
     switch (currencyCode) {
-      case 'USD': return 'en_US';
-      case 'EUR': return 'de_DE';
-      case 'GBP': return 'en_GB';
-      case 'JPY': return 'ja_JP';
-      case 'IDR': return 'id_ID';
-      case 'CNY': return 'zh_CN';
-      case 'SGD': return 'en_SG';
-      case 'MYR': return 'ms_MY';
-      case 'AUD': return 'en_AU';
-      case 'CAD': return 'en_CA';
-      case 'CHF': return 'de_CH';
-      case 'HKD': return 'zh_HK';
-      case 'NZD': return 'en_NZ';
-      case 'SEK': return 'sv_SE';
-      case 'KRW': return 'ko_KR';
-      case 'TRY': return 'tr_TR';
-      case 'INR': return 'en_IN';
-      case 'RUB': return 'ru_RU';
-      case 'BRL': return 'pt_BR';
-      case 'ZAR': return 'en_ZA';
-      default: return 'en_US';
+      case 'USD':
+        return 'en_US';
+      case 'EUR':
+        return 'de_DE';
+      case 'GBP':
+        return 'en_GB';
+      case 'JPY':
+        return 'ja_JP';
+      case 'IDR':
+        return 'id_ID';
+      case 'CNY':
+        return 'zh_CN';
+      case 'SGD':
+        return 'en_SG';
+      case 'MYR':
+        return 'ms_MY';
+      case 'AUD':
+        return 'en_AU';
+      case 'CAD':
+        return 'en_CA';
+      case 'CHF':
+        return 'de_CH';
+      case 'HKD':
+        return 'zh_HK';
+      case 'NZD':
+        return 'en_NZ';
+      case 'SEK':
+        return 'sv_SE';
+      case 'KRW':
+        return 'ko_KR';
+      case 'TRY':
+        return 'tr_TR';
+      case 'INR':
+        return 'en_IN';
+      case 'RUB':
+        return 'ru_RU';
+      case 'BRL':
+        return 'pt_BR';
+      case 'ZAR':
+        return 'en_ZA';
+      default:
+        return 'en_US';
     }
   }
 

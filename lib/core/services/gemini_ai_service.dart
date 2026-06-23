@@ -3,6 +3,8 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:neopay_ai/core/config/env.dart';
 import 'package:neopay_ai/core/providers/currency_provider.dart';
 import 'package:neopay_ai/core/services/exchange_rate_model.dart';
+import 'package:neopay_ai/repositories/firestore_transactions_repository.dart';
+import 'package:neopay_ai/core/di/locator.dart';
 
 /// Transfer intent detected by AI
 /// This is the bridge between AI function calling and the transfer system
@@ -25,7 +27,8 @@ class TransferIntent {
     this.exchangeRate,
   });
 
-  bool get needsConversion => convertedAmount != null && convertedCurrency != null;
+  bool get needsConversion =>
+      convertedAmount != null && convertedCurrency != null;
 
   Map<String, dynamic> toJson() {
     return {
@@ -50,6 +53,11 @@ class TransferIntent {
 }
 
 /// Chat message model for the AI chat interface
+enum MessageStatus {
+  none,
+  escrowPending,
+}
+
 class ChatMessage {
   final String id;
   final String content;
@@ -57,6 +65,7 @@ class ChatMessage {
   final DateTime timestamp;
   final TransferIntent? transferIntent;
   final bool isProcessing;
+  final MessageStatus status;
 
   const ChatMessage({
     required this.id,
@@ -65,6 +74,7 @@ class ChatMessage {
     required this.timestamp,
     this.transferIntent,
     this.isProcessing = false,
+    this.status = MessageStatus.none,
   });
 
   factory ChatMessage.user(String content) {
@@ -76,13 +86,14 @@ class ChatMessage {
     );
   }
 
-  factory ChatMessage.ai(String content, {TransferIntent? intent}) {
+  factory ChatMessage.ai(String content, {TransferIntent? intent, MessageStatus status = MessageStatus.none}) {
     return ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: content,
       isUser: false,
       timestamp: DateTime.now(),
       transferIntent: intent,
+      status: status,
     );
   }
 
@@ -109,12 +120,12 @@ class ChatMessage {
 }
 
 /// Gemini AI Service with Function Calling for smart transfers
-/// 
+///
 /// This service integrates with Google's Generative AI to provide:
 /// - Natural language understanding for transfer requests
 /// - Function calling to detect transfer intents
 /// - Automatic currency conversion suggestions
-/// 
+///
 /// The AI is instructed to use the `initiateTransfer` function when the user
 /// wants to send/transfer money. The function parameters include amount, currency,
 /// and recipient name. If any parameter is missing, the AI will ask for clarification.
@@ -129,6 +140,8 @@ class GeminiAiService {
   ChatSession? _chatSession;
   bool _isInitialized = false;
   String? _apiKey;
+  final FirestoreTransactionsRepository _transactionsRepo =
+      locator<FirestoreTransactionsRepository>();
 
   // Mock recipient database for demo purposes
   final Map<String, String> _mockRecipients = {
@@ -149,15 +162,17 @@ class GeminiAiService {
 
     // Priority: Provided apiKey, then Env.obfuscated key
     _apiKey = apiKey ?? Env.geminiApiKey;
-    
+
     if (_apiKey == null || _apiKey!.isEmpty) {
-      debugPrint('[GeminiAiService] No API key provided, AI features will be limited');
+      debugPrint(
+        '[GeminiAiService] No API key provided, AI features will be limited',
+      );
       return;
     }
 
     try {
       _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-flash-latest',
         apiKey: _apiKey!,
         systemInstruction: Content.system(_buildSystemInstruction()),
       );
@@ -216,7 +231,7 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
           FunctionDeclaration(
             'initiateTransfer',
             'Call this function when the user wants to send or transfer money to someone. '
-            'Ensure you have the amount, currency, and recipient name before calling.',
+                'Ensure you have the amount, currency, and recipient name before calling.',
             Schema.object(
               properties: {
                 'amount': Schema.number(
@@ -248,17 +263,54 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
       );
     }
 
+    debugPrint('[GeminiAiService] sendMessage called: $message');
+
     try {
+      // PHASE 2: Fetch recent transactions for context injection
+      String transactionContext = '';
+      try {
+        final result = await _transactionsRepo.fetchPage(pageSize: 20);
+        if (result.items.isNotEmpty) {
+          final formattedTransactions = result.items
+              .take(20)
+              .map((t) {
+                final dateStr = t.timestamp != null
+                    ? _formatDate(t.timestamp!)
+                    : 'N/A';
+                final noteStr = t.recipientNote != null
+                    ? ' - ${t.recipientNote}'
+                    : '';
+                return '[$dateStr] ${t.category}: ${t.amount} ${t.currency}$noteStr';
+              })
+              .join('\n');
+          transactionContext =
+              'Recent transaction history:\n$formattedTransactions\n\n';
+        }
+      } catch (e) {
+        debugPrint('[GeminiAiService] Failed to fetch transactions: $e');
+      }
+
+      // DEBUG: Print data before API call
+      print("DEBUG_AI_DATA: $transactionContext");
+
+      // Inject transaction context into the message
+      final contextualMessage = '${transactionContext}User message: $message';
+      final transactionHistoryString = transactionContext;
+      print("DEBUG_AI_DATA: $transactionHistoryString");
+      print("DEBUG_AI_CONTEXT_FINAL: $contextualMessage");
+
       // Update tools with current rates context
       _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-flash-latest',
         apiKey: _apiKey!,
         systemInstruction: Content.system(_buildSystemInstruction()),
         tools: _getTools(),
       );
       _chatSession = _model!.startChat();
 
-      final response = await _chatSession!.sendMessage(Content.text(message));
+      final response = await _chatSession!.sendMessage(
+        Content.text(contextualMessage),
+      );
 
       // Check for function calls
       final functionCalls = response.functionCalls;
@@ -275,7 +327,8 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
       }
 
       // Return normal text response
-      final text = response.text ?? 'I did not understand that. Could you rephrase?';
+      final text =
+          response.text ?? 'I did not understand that. Could you rephrase?';
       return ChatMessage.ai(text);
     } catch (e) {
       debugPrint('[GeminiAiService] Error: $e');
@@ -305,7 +358,11 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
 
     if (currencyProvider != null && currency != _defaultRecipientCurrency) {
       convertedCurrency = _defaultRecipientCurrency;
-      convertedAmount = currencyProvider.convert(amount, currency, convertedCurrency);
+      convertedAmount = currencyProvider.convert(
+        amount,
+        currency,
+        convertedCurrency,
+      );
       exchangeRate = currencyProvider.getRate(currency, convertedCurrency);
     }
 
@@ -323,7 +380,7 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
   /// Generate a natural language confirmation message
   String _generateTransferConfirmation(TransferIntent intent) {
     final symbol = SupportedCurrencies.getSymbol(intent.currency);
-    
+
     if (intent.needsConversion) {
       final cc = intent.convertedCurrency;
       if (cc == null) return '';
@@ -332,38 +389,49 @@ Keep responses concise and natural. Use emojis sparingly for a premium feel.
       final rateText = rate != null
           ? '(kurs: 1 ${intent.currency} = ${rate.toStringAsFixed(2)} ${intent.convertedCurrency})'
           : '';
-      
+
       final convertedAmount = intent.convertedAmount;
       if (convertedAmount == null) return '';
-      return 'Oke, siap! Mau kirim ${symbol}${intent.amount.toStringAsFixed(0)} ${intent.currency} ke ${intent.recipientName}.\n\n'
-          '💱 Dengan kurs saat ini, itu sekitar ${targetSymbol}${convertedAmount.toStringAsFixed(0)} ${intent.convertedCurrency}\n'
+      return 'Oke, siap! Mau kirim $symbol${intent.amount.toStringAsFixed(0)} ${intent.currency} ke ${intent.recipientName}.\n\n'
+          '💱 Dengan kurs saat ini, itu sekitar $targetSymbol${convertedAmount.toStringAsFixed(0)} ${intent.convertedCurrency}\n'
           '$rateText\n\n'
           'Lanjut transfer?';
     }
 
-    return 'Oke, siap! Mau kirim ${symbol}${intent.amount.toStringAsFixed(0)} ${intent.currency} ke ${intent.recipientName}.\n\nLanjut transfer?';
+    return 'Oke, siap! Mau kirim $symbol${intent.amount.toStringAsFixed(0)} ${intent.currency} ke ${intent.recipientName}.\n\nLanjut transfer?';
   }
 
   /// Analyze recent transactions and return a short financial insight
-  Future<String> analyzeTransactions(List<Map<String, dynamic>> recentTransactions) async {
+  Future<String> analyzeTransactions(
+    List<Map<String, dynamic>> recentTransactions,
+  ) async {
     if (!_isInitialized || _model == null) {
       return 'Wah, lagi error nih. Tapi tetap pantau pengeluaran lo ya!';
     }
-    
+
     try {
       if (recentTransactions.isEmpty) {
         return 'Belum ada transaksi bulan ini. Yuk mulai kelola keuangan lu!';
       }
-      
-      final summary = recentTransactions.map((t) => '${t['type']}: ${t['amount']} ${t['currency']}').join(', ');
-      final prompt = 'Ini transaksi terakhir gua: $summary. Berikan satu tips keuangan yang sangat singkat, friendly, dan menggunakan bahasa gaul (seperti lu/gua). Maksimal 2 kalimat pendek tanpa markdown atau bold.';
-      
+
+      final summary = recentTransactions
+          .map((t) => '${t['type']}: ${t['amount']} ${t['currency']}')
+          .join(', ');
+      final prompt =
+          'Ini transaksi terakhir gua: $summary. Berikan satu tips keuangan yang sangat singkat, friendly, dan menggunakan bahasa gaul (seperti lu/gua). Maksimal 2 kalimat pendek tanpa markdown atau bold.';
+
       final response = await _model!.generateContent([Content.text(prompt)]);
-      return response.text?.trim() ?? 'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
+      return response.text?.trim() ??
+          'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
     } catch (e) {
       debugPrint('[GeminiAiService] Insight error: $e');
       return 'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
     }
+  }
+
+  /// Format date for transaction display
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}';
   }
 
   /// Check if the service is ready

@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../repositories/users_repository.dart';
+import '../../../core/di/locator.dart';
 import '../../../theme/app_theme.dart';
 
 class TransferContactListWidget extends StatefulWidget {
@@ -21,7 +22,7 @@ class TransferContactListWidget extends StatefulWidget {
 }
 
 class _TransferContactListWidgetState extends State<TransferContactListWidget> {
-  final UsersRepository _usersRepository = UsersRepository.instance;
+  final UsersRepository _usersRepository = locator<UsersRepository>();
   final TextEditingController _searchController = TextEditingController();
   List<TransferUser> _users = [];
   bool _isLoading = true;
@@ -160,7 +161,9 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
               if (_isLoading)
                 const SizedBox(
                   height: 96,
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 )
               else if (_error != null)
                 SizedBox(
@@ -196,8 +199,10 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
                       final user = _users[index];
                       final isSelected = widget.selectedContactId == user.uid;
                       return GestureDetector(
-                        onTap: () =>
-                            widget.onContactSelected(user.uid, user.displayName),
+                        onTap: () => widget.onContactSelected(
+                          user.uid,
+                          user.displayName,
+                        ),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.only(right: 10),
@@ -238,7 +243,9 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
                                           imageUrl: user.photoUrl!,
                                           fit: BoxFit.cover,
                                           placeholder: (c, s) => Container(
-                                            color: AppTheme.primary.withAlpha(30),
+                                            color: AppTheme.primary.withAlpha(
+                                              30,
+                                            ),
                                             child: const Center(
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
@@ -246,10 +253,11 @@ class _TransferContactListWidgetState extends State<TransferContactListWidget> {
                                               ),
                                             ),
                                           ),
-                                          errorWidget: (c, s, e) => _AvatarPlaceholder(
-                                            initials: user.initials,
-                                            isSelected: isSelected,
-                                          ),
+                                          errorWidget: (c, s, e) =>
+                                              _AvatarPlaceholder(
+                                                initials: user.initials,
+                                                isSelected: isSelected,
+                                              ),
                                         ),
                                       ),
                                     )
@@ -289,10 +297,7 @@ class _AvatarPlaceholder extends StatelessWidget {
   final String initials;
   final bool isSelected;
 
-  const _AvatarPlaceholder({
-    required this.initials,
-    required this.isSelected,
-  });
+  const _AvatarPlaceholder({required this.initials, required this.isSelected});
 
   @override
   Widget build(BuildContext context) {

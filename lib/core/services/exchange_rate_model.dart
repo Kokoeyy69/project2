@@ -3,10 +3,10 @@
 class ExchangeRateModel {
   /// Map of currency code to exchange rate (relative to USD)
   final Map<String, double> rates;
-  
+
   /// Timestamp when these rates were fetched
   final DateTime timestamp;
-  
+
   /// Base currency for these rates
   final String baseCurrency;
 
@@ -22,7 +22,7 @@ class ExchangeRateModel {
     final rates = ratesJson.map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
     );
-    
+
     return ExchangeRateModel(
       rates: rates,
       timestamp: DateTime.parse(json['timestamp'] as String),
@@ -48,22 +48,19 @@ class ExchangeRateModel {
   /// Returns null if either currency is not supported
   double? getRate(String from, String to) {
     if (from == to) return 1.0;
-    
+
     final fromRate = rates[from];
     final toRate = rates[to];
-    
+
     if (fromRate == null || toRate == null) return null;
-    
+
     // Convert: from -> USD -> to
     return toRate / fromRate;
   }
 
   /// Create empty model
   static ExchangeRateModel empty() {
-    return ExchangeRateModel(
-      rates: {},
-      timestamp: DateTime(2000),
-    );
+    return ExchangeRateModel(rates: {}, timestamp: DateTime(2000));
   }
 }
 
@@ -92,85 +89,160 @@ class SupportedCurrencies {
 
   /// List of primary currencies supported by the app
   static const List<String> primary = [IDR, USD, CNY];
-  
+
   /// List of all supported currencies
   static const List<String> all = [
-    IDR, USD, CNY, EUR, GBP, JPY, SGD, MYR, AUD, CAD,
-    CHF, HKD, NZD, SEK, KRW, TRY, INR, RUB, BRL, ZAR,
+    IDR,
+    USD,
+    CNY,
+    EUR,
+    GBP,
+    JPY,
+    SGD,
+    MYR,
+    AUD,
+    CAD,
+    CHF,
+    HKD,
+    NZD,
+    SEK,
+    KRW,
+    TRY,
+    INR,
+    RUB,
+    BRL,
+    ZAR,
   ];
 
   /// Get currency symbol for display
   static String getSymbol(String currencyCode) {
     switch (currencyCode) {
-      case USD: return '\$';
-      case EUR: return '€';
-      case GBP: return '£';
-      case JPY: return '¥';
-      case IDR: return 'Rp';
-      case CNY: return '¥';
-      case SGD: return 'S\$';
-      case MYR: return 'RM';
-      case INR: return '₹';
-      case KRW: return '₩';
-      case BRL: return 'R\$';
-      case ZAR: return 'R';
-      case TRY: return '₺';
-      case RUB: return '₽';
-      default: return currencyCode;
+      case USD:
+        return '\$';
+      case EUR:
+        return '€';
+      case GBP:
+        return '£';
+      case JPY:
+        return '¥';
+      case IDR:
+        return 'Rp';
+      case CNY:
+        return '¥';
+      case SGD:
+        return 'S\$';
+      case MYR:
+        return 'RM';
+      case INR:
+        return '₹';
+      case KRW:
+        return '₩';
+      case BRL:
+        return 'R\$';
+      case ZAR:
+        return 'R';
+      case TRY:
+        return '₺';
+      case RUB:
+        return '₽';
+      default:
+        return currencyCode;
     }
   }
 
   /// Get currency name for display
   static String getName(String currencyCode) {
     switch (currencyCode) {
-      case USD: return 'US Dollar';
-      case EUR: return 'Euro';
-      case GBP: return 'British Pound';
-      case JPY: return 'Japanese Yen';
-      case IDR: return 'Indonesian Rupiah';
-      case CNY: return 'Chinese Yuan';
-      case SGD: return 'Singapore Dollar';
-      case MYR: return 'Malaysian Ringgit';
-      case AUD: return 'Australian Dollar';
-      case CAD: return 'Canadian Dollar';
-      case CHF: return 'Swiss Franc';
-      case HKD: return 'Hong Kong Dollar';
-      case NZD: return 'New Zealand Dollar';
-      case SEK: return 'Swedish Krona';
-      case KRW: return 'South Korean Won';
-      case TRY: return 'Turkish Lira';
-      case INR: return 'Indian Rupee';
-      case RUB: return 'Russian Ruble';
-      case BRL: return 'Brazilian Real';
-      case ZAR: return 'South African Rand';
-      default: return currencyCode;
+      case USD:
+        return 'US Dollar';
+      case EUR:
+        return 'Euro';
+      case GBP:
+        return 'British Pound';
+      case JPY:
+        return 'Japanese Yen';
+      case IDR:
+        return 'Indonesian Rupiah';
+      case CNY:
+        return 'Chinese Yuan';
+      case SGD:
+        return 'Singapore Dollar';
+      case MYR:
+        return 'Malaysian Ringgit';
+      case AUD:
+        return 'Australian Dollar';
+      case CAD:
+        return 'Canadian Dollar';
+      case CHF:
+        return 'Swiss Franc';
+      case HKD:
+        return 'Hong Kong Dollar';
+      case NZD:
+        return 'New Zealand Dollar';
+      case SEK:
+        return 'Swedish Krona';
+      case KRW:
+        return 'South Korean Won';
+      case TRY:
+        return 'Turkish Lira';
+      case INR:
+        return 'Indian Rupee';
+      case RUB:
+        return 'Russian Ruble';
+      case BRL:
+        return 'Brazilian Real';
+      case ZAR:
+        return 'South African Rand';
+      default:
+        return currencyCode;
     }
   }
 
   /// Get flag emoji for currency
   static String getFlagEmoji(String currencyCode) {
     switch (currencyCode) {
-      case USD: return '🇺🇸';
-      case EUR: return '🇪🇺';
-      case GBP: return '🇬🇧';
-      case JPY: return '🇯🇵';
-      case IDR: return '🇮🇩';
-      case CNY: return '🇨🇳';
-      case SGD: return '🇸🇬';
-      case MYR: return '🇲🇾';
-      case AUD: return '🇦🇺';
-      case CAD: return '🇨🇦';
-      case CHF: return '🇨🇭';
-      case HKD: return '🇭🇰';
-      case NZD: return '🇳🇿';
-      case SEK: return '🇸🇪';
-      case KRW: return '🇰🇷';
-      case TRY: return '🇹🇷';
-      case INR: return '🇮🇳';
-      case RUB: return '🇷🇺';
-      case BRL: return '🇧🇷';
-      case ZAR: return '🇿🇦';
-      default: return '💱';
+      case USD:
+        return '🇺🇸';
+      case EUR:
+        return '🇪🇺';
+      case GBP:
+        return '🇬🇧';
+      case JPY:
+        return '🇯🇵';
+      case IDR:
+        return '🇮🇩';
+      case CNY:
+        return '🇨🇳';
+      case SGD:
+        return '🇸🇬';
+      case MYR:
+        return '🇲🇾';
+      case AUD:
+        return '🇦🇺';
+      case CAD:
+        return '🇨🇦';
+      case CHF:
+        return '🇨🇭';
+      case HKD:
+        return '🇭🇰';
+      case NZD:
+        return '🇳🇿';
+      case SEK:
+        return '🇸🇪';
+      case KRW:
+        return '🇰🇷';
+      case TRY:
+        return '🇹🇷';
+      case INR:
+        return '🇮🇳';
+      case RUB:
+        return '🇷🇺';
+      case BRL:
+        return '🇧🇷';
+      case ZAR:
+        return '🇿🇦';
+      default:
+        return '💱';
     }
   }
 }

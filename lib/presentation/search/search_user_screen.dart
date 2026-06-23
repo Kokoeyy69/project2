@@ -75,12 +75,14 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
       setState(() {
         _searchResults = snapshot.docs
             .where((doc) => doc.id != currentUid) // Exclude self
-            .map((doc) => {
-                  'id': doc.id,
-                  'name': doc.data()['name'] ?? 'Unknown',
-                  'email': doc.data()['email'] ?? '',
-                  'avatar': doc.data()['avatar'] ?? '',
-                })
+            .map(
+              (doc) => {
+                'id': doc.id,
+                'name': doc.data()['name'] ?? 'Unknown',
+                'email': doc.data()['email'] ?? '',
+                'avatar': doc.data()['avatar'] ?? '',
+              },
+            )
             .toList();
         _isSearching = false;
       });
@@ -91,7 +93,10 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Search error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Search error: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -102,9 +107,14 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Text('Cari Pengguna',
-            style: GoogleFonts.inter(
-                fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        title: Text(
+          'Cari Pengguna',
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+        ),
         backgroundColor: AppTheme.background,
         elevation: 0,
         leading: IconButton(
@@ -130,10 +140,16 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                 decoration: InputDecoration(
                   hintText: 'Cari nama atau email...',
                   hintStyle: GoogleFonts.inter(color: AppTheme.textMuted),
-                  prefixIcon: const Icon(Icons.search, color: AppTheme.textMuted),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: AppTheme.textMuted,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: AppTheme.textMuted),
+                          icon: const Icon(
+                            Icons.clear,
+                            color: AppTheme.textMuted,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {
@@ -149,9 +165,7 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
             ),
           ),
           // Results
-          Expanded(
-            child: _buildResults(),
-          ),
+          Expanded(child: _buildResults()),
         ],
       ),
     );
@@ -170,15 +184,26 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                 color: AppTheme.glassBackground,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.search, size: 40, color: AppTheme.textMuted),
+              child: const Icon(
+                Icons.search,
+                size: 40,
+                color: AppTheme.textMuted,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Cari pengguna untuk transfer',
-                style: GoogleFonts.inter(
-                    fontSize: 16, color: AppTheme.textSecondary, fontWeight: FontWeight.w500)),
+            Text(
+              'Cari pengguna untuk transfer',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Ketik nama atau email untuk mencari',
-                style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textMuted)),
+            Text(
+              'Ketik nama atau email untuk mencari',
+              style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textMuted),
+            ),
           ],
         ),
       );
@@ -204,15 +229,26 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                 color: AppTheme.errorMuted,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.person_off, size: 40, color: AppTheme.error),
+              child: const Icon(
+                Icons.person_off,
+                size: 40,
+                color: AppTheme.error,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Pengguna tidak ditemukan',
-                style: GoogleFonts.inter(
-                    fontSize: 16, color: AppTheme.textSecondary, fontWeight: FontWeight.w500)),
+            Text(
+              'Pengguna tidak ditemukan',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Coba dengan nama atau email lain',
-                style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textMuted)),
+            Text(
+              'Coba dengan nama atau email lain',
+              style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textMuted),
+            ),
           ],
         ),
       );
@@ -255,13 +291,34 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(height: 14, width: 140, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                    Container(
+                      height: 14,
+                      width: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Container(height: 12, width: 100, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                    Container(
+                      height: 12,
+                      width: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Container(width: 24, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6))),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
             ],
           ),
         ),
@@ -270,7 +327,9 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
   }
 
   Widget _buildUserTile(Map<String, dynamic> user) {
-    final initial = (user['name'] as String).isNotEmpty ? (user['name'] as String)[0].toUpperCase() : '?';
+    final initial = (user['name'] as String).isNotEmpty
+        ? (user['name'] as String)[0].toUpperCase()
+        : '?';
 
     return GestureDetector(
       onTap: () {
@@ -299,7 +358,10 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                 child: Text(
                   initial,
                   style: GoogleFonts.inter(
-                      fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.primary),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -311,14 +373,20 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
                   Text(
                     user['name'] as String,
                     style: GoogleFonts.inter(
-                        fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     user['email'] as String? ?? '',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

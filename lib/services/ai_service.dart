@@ -1,36 +1,30 @@
 import 'dart:convert';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:neopay_ai/core/config/env.dart';
+
+import 'package:google_generative_ai/google_generative_ai.dart' as google_ai;
+import '../core/config/env.dart';
 
 class AiService {
-  GenerativeModel? _model;
+  google_ai.GenerativeModel? _model;
   bool _isInitialized = false;
-
-  // 1. HYBRID DETECTION (Cloud vs On-Device fallback)
-  Future<bool> _isDeviceCapableForLocalAI() async {
-    // Default to false (Cloud) for now. Future: check RAM/NPU.
-    return false;
-  }
 
   Future<void> _ensureInitialized() async {
     if (_isInitialized) return;
-    
+
     final apiKey = Env.geminiApiKey;
-    final isLocalCapable = await _isDeviceCapableForLocalAI();
-    
-    // Use Nano if local is capable, otherwise use Flash
-    final modelName = isLocalCapable ? 'gemini-nano' : 'gemini-flash-latest';
+
+    // Strictly use gemini-2.5-flash for cloud assistant
+    final modelName = 'gemini-2.5-flash';
     print('[AiService] Using architecture: $modelName');
 
     // 2. JSON MODE & FINTECH PERSONA
-    _model = GenerativeModel(
+    _model = google_ai.GenerativeModel(
       model: modelName,
       apiKey: apiKey,
-      generationConfig: GenerationConfig(
+      generationConfig: google_ai.GenerationConfig(
         responseMimeType: 'application/json',
         temperature: 0.1, // Highly deterministic
       ),
-      systemInstruction: Content.system('''
+      systemInstruction: google_ai.Content.system('''
         You are NeoPay AI, a secure financial assistant.
         ALWAYS respond in valid JSON format ONLY. No markdown, no extra text.
         Schema:
@@ -50,7 +44,10 @@ class AiService {
   }
 
   // 3. CONTEXT INJECTION & JSON PARSING
-  Future<Map<String, dynamic>> sendAgentMessage(String prompt, {String? financialContext}) async {
+  Future<Map<String, dynamic>> sendAgentMessage(
+    String prompt, {
+    String? financialContext,
+  }) async {
     await _ensureInitialized();
 
     String finalPrompt = prompt;
@@ -59,19 +56,27 @@ class AiService {
     }
 
     try {
-      final response = await _model!.generateContent([Content.text(finalPrompt)]);
+      final response = await _model!.generateContent([
+        google_ai.Content.text(finalPrompt),
+      ]);
       if (response.text != null) {
-        // Clean JSON just in case Gemini hallucinates markdown formatting
-        String cleanJson = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
-        return jsonDecode(cleanJson);
+        // Extract only the JSON object using RegExp to prevent hallucination
+        final textResponse = response.text!;
+        final match = RegExp(r'\{[\s\S]*\}').firstMatch(textResponse);
+        if (match != null) {
+          return jsonDecode(match.group(0)!);
+        } else {
+          throw Exception('Invalid JSON format from AI');
+        }
       }
       throw Exception('Empty response from AI');
     } catch (e) {
-      print('[AiService] Agent Error: $e');
+      print('[AiService Error]: $e');
       return {
-        "reply": "Maaf, terjadi kesalahan pada sistem AI.",
+        "reply":
+            "Maaf, terjadi kendala saat memproses permintaan Anda. (Info log: ${e.toString()})",
         "action": "none",
-        "transfer_details": {"amount": 0, "recipient": ""}
+        "transfer_details": {"amount": 0, "recipient": ""},
       };
     }
   }

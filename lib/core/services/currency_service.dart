@@ -6,17 +6,17 @@ import '../config/env.dart';
 import 'exchange_rate_model.dart';
 
 /// Resilient currency exchange service with automatic failover
-/// 
+///
 /// This service implements a robust currency rate fetching system:
 /// 1. Primary API: ExchangeRate-API (requires API key)
 /// 2. Fallback API: Frankfurter API (no key required, EU Central Bank rates)
-/// 
+///
 /// Caching Strategy:
 /// - Rates are cached in Hive for 12 hours
 /// - Cache is checked before any API call
 /// - If cache is valid (< 12 hours old), cached data is used
 /// - Network is only called when cache is expired or missing
-/// 
+///
 /// Failover Logic:
 /// - If primary API returns 429 (rate limit), timeout, or error -> try fallback
 /// - If fallback also fails -> return cached data if available
@@ -29,20 +29,40 @@ class CurrencyService {
   static CurrencyService get instance => _instance;
 
   final Dio _dio = Dio();
-  
+
   // API Configuration - Using obfuscated key from Env
-  static final String _primaryBaseUrl = 'https://v6.exchangerate-api.com/v6/${Env.exchangeRateApiKey}/latest/USD';
-  static const String _fallbackBaseUrl = 'https://api.frankfurter.app/latest?from=USD';
-  
+  static final String _primaryBaseUrl =
+      'https://v6.exchangerate-api.com/v6/${Env.exchangeRateApiKey}/latest/USD';
+  static const String _fallbackBaseUrl =
+      'https://api.frankfurter.app/latest?from=USD';
+
   // Cache configuration
   static const String _cacheBoxName = 'currency_cache';
   static const String _cacheKey = 'latest_rates';
   static const Duration _cacheMaxAge = Duration(hours: 12);
-  
+
   // Supported currencies for primary API (ExchangeRate-API supports ~160+ currencies)
   static const List<String> _supportedCurrencies = [
-    'USD', 'EUR', 'GBP', 'IDR', 'CNY', 'JPY', 'SGD', 'MYR', 'AUD', 'CAD',
-    'CHF', 'HKD', 'NZD', 'SEK', 'KRW', 'TRY', 'INR', 'RUB', 'BRL', 'ZAR',
+    'USD',
+    'EUR',
+    'GBP',
+    'IDR',
+    'CNY',
+    'JPY',
+    'SGD',
+    'MYR',
+    'AUD',
+    'CAD',
+    'CHF',
+    'HKD',
+    'NZD',
+    'SEK',
+    'KRW',
+    'TRY',
+    'INR',
+    'RUB',
+    'BRL',
+    'ZAR',
   ];
 
   late Box _cacheBox;
@@ -51,7 +71,7 @@ class CurrencyService {
   /// Initialize the service (call after HiveCacheService.init())
   Future<void> init() async {
     if (_initialized) return;
-    
+
     try {
       await Hive.initFlutter();
       _cacheBox = await Hive.openBox(_cacheBoxName);
@@ -64,15 +84,19 @@ class CurrencyService {
   }
 
   /// Fetch latest exchange rates with failover and caching
-  /// 
+  ///
   /// Returns [ExchangeRateModel] with current rates
   /// Throws exception if both APIs fail and no cache is available
-  Future<ExchangeRateModel> fetchLatestRates({bool forceRefresh = false}) async {
+  Future<ExchangeRateModel> fetchLatestRates({
+    bool forceRefresh = false,
+  }) async {
     // Step 1: Check cache first (unless force refresh)
     if (!forceRefresh) {
       final cachedRates = await _getCachedRates();
       if (cachedRates != null && !cachedRates.isStale(maxAge: _cacheMaxAge)) {
-        debugPrint('[CurrencyService] Using cached rates from ${cachedRates.timestamp}');
+        debugPrint(
+          '[CurrencyService] Using cached rates from ${cachedRates.timestamp}',
+        );
         return cachedRates;
       }
     }
@@ -142,7 +166,7 @@ class CurrencyService {
   }
 
   /// Fetch from primary API (ExchangeRate-API)
-  /// 
+  ///
   /// API Response format:
   /// {
   ///   "result": "success",
@@ -166,13 +190,16 @@ class CurrencyService {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        
+
         // Check for API-level errors
         if (data['result'] == 'error') {
-          throw Exception('ExchangeRate-API error: ${data['error-type'] ?? 'Unknown error'}');
+          throw Exception(
+            'ExchangeRate-API error: ${data['error-type'] ?? 'Unknown error'}',
+          );
         }
 
-        final conversionRates = data['conversion_rates'] as Map<String, dynamic>?;
+        final conversionRates =
+            data['conversion_rates'] as Map<String, dynamic>?;
         if (conversionRates == null) {
           throw Exception('Invalid response format from ExchangeRate-API');
         }
@@ -197,7 +224,9 @@ class CurrencyService {
       } else if (response.statusCode == 429) {
         throw Exception('ExchangeRate-API rate limit exceeded (429)');
       } else {
-        throw Exception('ExchangeRate-API returned status ${response.statusCode}');
+        throw Exception(
+          'ExchangeRate-API returned status ${response.statusCode}',
+        );
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionTimeout ||
@@ -213,7 +242,7 @@ class CurrencyService {
   }
 
   /// Fetch from fallback API (Frankfurter - EU Central Bank rates)
-  /// 
+  ///
   /// API Response format:
   /// {
   ///   "amount": 1,
@@ -222,7 +251,7 @@ class CurrencyService {
   ///   "end_date": "2024-01-01",
   ///   "rates": { "EUR": 0.85, "GBP": 0.73, ... }
   /// }
-  /// 
+  ///
   /// Note: Frankfurter API has limited currency support (~30 currencies)
   /// but is reliable and doesn't require an API key.
   Future<ExchangeRateModel> _fetchFromFallbackApi() async {
@@ -238,14 +267,14 @@ class CurrencyService {
       if (response.statusCode == 200) {
         final data = response.data;
         final ratesJson = data['rates'] as Map<String, dynamic>?;
-        
+
         if (ratesJson == null) {
           throw Exception('Invalid response format from Frankfurter API');
         }
 
         // Convert to our format (rates relative to USD)
         final rates = <String, double>{'USD': 1.0};
-        
+
         for (final entry in ratesJson.entries) {
           final currency = entry.key;
           final rate = entry.value;
@@ -264,7 +293,9 @@ class CurrencyService {
           baseCurrency: 'USD',
         );
       } else {
-        throw Exception('Frankfurter API returned status ${response.statusCode}');
+        throw Exception(
+          'Frankfurter API returned status ${response.statusCode}',
+        );
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionTimeout ||

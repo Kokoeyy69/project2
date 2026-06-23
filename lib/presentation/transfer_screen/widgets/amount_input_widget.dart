@@ -10,10 +10,7 @@ import '../../../services/hive_cache_service.dart';
 class AmountInputWidget extends StatelessWidget {
   final int selectedWalletIndex;
 
-  const AmountInputWidget({
-    super.key,
-    required this.selectedWalletIndex,
-  });
+  const AmountInputWidget({super.key, required this.selectedWalletIndex});
 
   @override
   Widget build(BuildContext context) {
@@ -83,15 +80,17 @@ class AmountInputWidget extends StatelessWidget {
 
   Widget _buildBalanceWarning(BuildContext context, TransferViewModel vm) {
     final cachedBalance = HiveCacheService.getCachedBalance() ?? 0.0;
-    
+
     // Convert current amount to IDR if it's not already
     double amountInIdr = vm.numericAmount;
-    if (selectedWalletIndex == 1) { // USD
+    if (selectedWalletIndex == 1) {
+      // USD
       amountInIdr *= 15000; // Mock rate for validation
-    } else if (selectedWalletIndex == 2) { // CNY
+    } else if (selectedWalletIndex == 2) {
+      // CNY
       amountInIdr *= 2100; // Mock rate for validation
     }
-    
+
     if (vm.numericAmount > 0 && amountInIdr > cachedBalance) {
       return Text(
         'Saldo tidak mencukupi',

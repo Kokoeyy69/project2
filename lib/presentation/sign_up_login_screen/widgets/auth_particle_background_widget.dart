@@ -1,22 +1,5 @@
-import 'dart:math' as math;
+import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../../theme/app_theme.dart';
-
-class _Particle {
-  Offset position;
-  Offset velocity;
-  double radius;
-  double opacity;
-  Color color;
-
-  _Particle({
-    required this.position,
-    required this.velocity,
-    required this.radius,
-    required this.opacity,
-    required this.color,
-  });
-}
 
 class AuthParticleBackgroundWidget extends StatefulWidget {
   const AuthParticleBackgroundWidget({super.key});
@@ -31,98 +14,106 @@ class _AuthParticleBackgroundWidgetState
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final List<_Particle> _particles = [];
-  final math.Random _random = math.Random();
-  Size _screenSize = Size.zero;
+  final Random _random = Random();
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 60),
-    )..repeat();
-    _controller.addListener(_updateParticles);
-  }
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 10))
+          ..addListener(() {
+            _updateParticles();
+          })
+          ..repeat();
 
-  void _initParticles(Size size) {
-    if (_particles.isNotEmpty) return;
-    _screenSize = size;
-    for (int i = 0; i < 45; i++) {
-      _particles.add(_createParticle(size));
+    for (int i = 0; i < 20; i++) {
+      _particles.add(
+        _Particle(
+          position: Offset(
+            _random.nextDouble() * 400,
+            _random.nextDouble() * 800,
+          ),
+          velocity: Offset(
+            _random.nextDouble() * 2 - 1,
+            _random.nextDouble() * 2 - 1,
+          ),
+          radius: _random.nextDouble() * 4 + 2,
+          opacity: _random.nextDouble() * 0.4 + 0.1,
+        ),
+      );
     }
-  }
-
-  _Particle _createParticle(Size size) {
-    final colors = [AppTheme.primary, AppTheme.accent, Colors.white];
-    return _Particle(
-      position: Offset(
-        _random.nextDouble() * size.width,
-        _random.nextDouble() * size.height,
-      ),
-      velocity: Offset(
-        (_random.nextDouble() - 0.5) * 0.4,
-        (_random.nextDouble() - 0.5) * 0.4,
-      ),
-      radius: _random.nextDouble() * 2.5 + 0.5,
-      opacity: _random.nextDouble() * 0.25 + 0.05,
-      color: colors[_random.nextInt(colors.length)],
-    );
   }
 
   void _updateParticles() {
-    if (_screenSize == Size.zero) return;
-    for (final p in _particles) {
-      p.position = Offset(
-        (p.position.dx + p.velocity.dx) % _screenSize.width,
-        (p.position.dy + p.velocity.dy) % _screenSize.height,
-      );
-      if (p.position.dx < 0) {
-        p.position = Offset(_screenSize.width, p.position.dy);
-      }
-      if (p.position.dy < 0) {
-        p.position = Offset(p.position.dx, _screenSize.height);
-      }
-    }
-    if (mounted) setState(() {});
+    // Using CustomPainter for performance; animation rebuilds through AnimatedBuilder.
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_updateParticles);
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
-        _initParticles(size);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
         return CustomPaint(
-          painter: _ParticlePainter(particles: _particles),
-          size: size,
+          painter: _ParticlePainter(_particles, _controller.value),
         );
       },
     );
   }
 }
 
+class _Particle {
+  Offset position;
+  Offset velocity;
+  double radius;
+  double opacity;
+
+  _Particle({
+    required this.position,
+    required this.velocity,
+    required this.radius,
+    required this.opacity,
+  });
+}
+
 class _ParticlePainter extends CustomPainter {
   final List<_Particle> particles;
+  final double animationValue;
 
-  _ParticlePainter({required this.particles});
+  _ParticlePainter(this.particles, this.animationValue);
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final p in particles) {
-      final paint = Paint()
-        ..color = p.color.withAlpha((p.opacity * 255).round())
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(p.position, p.radius, paint);
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    for (var particle in particles) {
+      // Update position based on velocity and animation
+      particle.position += particle.velocity;
+
+      // Wrap around edges
+      if (particle.position.dx < 0) {
+        particle.position = Offset(size.width, particle.position.dy);
+      }
+      if (particle.position.dx > size.width) {
+        particle.position = Offset(0, particle.position.dy);
+      }
+      if (particle.position.dy < 0) {
+        particle.position = Offset(particle.position.dx, size.height);
+      }
+      if (particle.position.dy > size.height) {
+        particle.position = Offset(particle.position.dx, 0);
+      }
+
+      paint.color = Colors.blue.withValues(alpha: particle.opacity);
+      canvas.drawCircle(particle.position, particle.radius, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_ParticlePainter oldDelegate) => true;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

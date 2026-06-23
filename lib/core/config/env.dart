@@ -5,10 +5,10 @@ part 'env.g.dart';
 // force rebuild v2 - ensure build_runner detects changes
 
 /// Environment configuration with obfuscated API keys
-/// 
+///
 /// This class provides secure access to environment variables.
 /// Keys are obfuscated at compile time to prevent easy reverse engineering.
-/// 
+///
 /// Usage:
 /// ```dart
 /// final geminiKey = Env.geminiApiKey;

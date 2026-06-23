@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../routes/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,12 +15,24 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Delay 3 detik biar user sempet lihat desainnya
-    _timer = Timer(const Duration(seconds: 3), () {
-      // Pastikan route '/onboarding' atau '/login' ini sudah ada di main.dart kamu
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/onboarding-screen');
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer(const Duration(seconds: 2), () {
+      _checkAuthAndNavigate();
     });
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    if (!mounted) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Navigator.pushReplacementNamed(context, AppRoutes.signUpLoginScreen);
+    } else {
+      // If logged in, go to home (SecurityService will auto-overlay PIN if needed)
+      Navigator.pushReplacementNamed(context, AppRoutes.homeScreen);
+    }
   }
 
   @override

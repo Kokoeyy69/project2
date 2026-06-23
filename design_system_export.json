@@ -1,0 +1,723 @@
+{
+  "designTokens": {
+    "colors": {
+      "background": "#0D0F14",
+      "surface": "#111827",
+      "surfaceVariant": "#1A2340",
+      "surfaceElevated": "#1E2D45",
+      "primary": "#3B82F6",
+      "primaryMuted": "#4D3B82F6",
+      "primaryContainer": "#1D3A6B",
+      "accent": "#06B6D4",
+      "accentMuted": "#3306B6D4",
+      "success": "#10B981",
+      "successMuted": "#2010B981",
+      "warning": "#F59E0B",
+      "warningMuted": "#20F59E0B",
+      "error": "#EF4444",
+      "errorMuted": "#20EF4444",
+      "textPrimary": "#FFFFFF",
+      "textSecondary": "#94A3B8",
+      "textMuted": "#475569",
+      "separator": "#14FFFFFF",
+      "glassBorder": "#1FFFFFFF",
+      "glassBackground": "#0DFFFFFF"
+    },
+    "typography": {
+      "displayLarge": {
+        "fontFamily": "Inter",
+        "fontSize": "36",
+        "fontWeight": "700",
+        "lineHeight": "1.2",
+        "letterSpacing": "-0.5"
+      },
+      "displayMedium": {
+        "fontFamily": "Inter",
+        "fontSize": "28",
+        "fontWeight": "700",
+        "lineHeight": "1.2",
+        "letterSpacing": "-0.3"
+      },
+      "headlineLarge": {
+        "fontFamily": "Inter",
+        "fontSize": "24",
+        "fontWeight": "700",
+        "lineHeight": "1.2"
+      },
+      "headlineMedium": {
+        "fontFamily": "Inter",
+        "fontSize": "20",
+        "fontWeight": "600",
+        "lineHeight": "1.2"
+      },
+      "headlineSmall": {
+        "fontFamily": "Inter",
+        "fontSize": "18",
+        "fontWeight": "600",
+        "lineHeight": "1.2"
+      },
+      "titleLarge": {
+        "fontFamily": "Inter",
+        "fontSize": "16",
+        "fontWeight": "600",
+        "lineHeight": "1.2"
+      },
+      "titleMedium": {
+        "fontFamily": "Inter",
+        "fontSize": "15",
+        "fontWeight": "500",
+        "lineHeight": "1.2"
+      },
+      "titleSmall": {
+        "fontFamily": "Inter",
+        "fontSize": "13",
+        "fontWeight": "500",
+        "lineHeight": "1.2"
+      },
+      "bodyLarge": {
+        "fontFamily": "Inter",
+        "fontSize": "16",
+        "fontWeight": "400",
+        "lineHeight": "1.5"
+      },
+      "bodyMedium": {
+        "fontFamily": "Inter",
+        "fontSize": "14",
+        "fontWeight": "400",
+        "lineHeight": "1.5"
+      },
+      "bodySmall": {
+        "fontFamily": "Inter",
+        "fontSize": "12",
+        "fontWeight": "400",
+        "lineHeight": "1.5"
+      },
+      "labelLarge": {
+        "fontFamily": "Inter",
+        "fontSize": "14",
+        "fontWeight": "600",
+        "lineHeight": "1.15",
+        "letterSpacing": "0.1"
+      },
+      "labelMedium": {
+        "fontFamily": "Inter",
+        "fontSize": "12",
+        "fontWeight": "600",
+        "lineHeight": "1.15",
+        "letterSpacing": "0.3"
+      },
+      "labelSmall": {
+        "fontFamily": "Inter",
+        "fontSize": "11",
+        "fontWeight": "500",
+        "lineHeight": "1.15",
+        "letterSpacing": "0.2"
+      }
+    },
+    "spacing": {
+      "scale": "8",
+      "xs": "4",
+      "sm": "8",
+      "md": "12",
+      "lg": "16",
+      "xl": "24",
+      "2xl": "32"
+    },
+    "borderRadius": {
+      "small": "8",
+      "medium": "12",
+      "large": "16",
+      "xl": "24"
+    },
+    "shadows": {
+      "elevation0": "0",
+      "elevation2": "2"
+    }
+  },
+  "componentLibrary": [
+    {
+      "name": "Button (Elevated)",
+      "type": "Button",
+      "layout": "Horizontal Auto Layout",
+      "gap": "0",
+      "padding": "16px Vertical, 24px Horizontal",
+      "visualAttributes": {
+        "background": "#3B82F6",
+        "textColor": "#FFFFFF",
+        "borderRadius": "16px",
+        "elevation": "0"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "#3B82F6",
+          "state": "enabled"
+        },
+        {
+          "name": "Disabled",
+          "background": "#1E293B",
+          "state": "disabled"
+        },
+        {
+          "name": "Hover",
+          "background": "#2563EB",
+          "state": "hover"
+        }
+      ]
+    },
+    {
+      "name": "Card",
+      "type": "Container",
+      "layout": "Vertical Auto Layout",
+      "gap": "12",
+      "padding": "16px All",
+      "visualAttributes": {
+        "background": "#1A2340",
+        "borderRadius": "24px",
+        "elevation": "0",
+        "border": "0.5px solid #1FFFFFFF"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "#1A2340"
+        },
+        {
+          "name": "Elevated",
+          "background": "#1E2D45"
+        }
+      ]
+    },
+    {
+      "name": "Text Input",
+      "type": "Input",
+      "layout": "Horizontal Auto Layout",
+      "gap": "0",
+      "padding": "16px Vertical, 20px Horizontal",
+      "visualAttributes": {
+        "background": "#0DFFFFFF",
+        "borderRadius": "16px",
+        "border": "1px solid #1FFFFFFF",
+        "textColor": "#FFFFFF"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "borderColor": "#1FFFFFFF"
+        },
+        {
+          "name": "Focused",
+          "borderColor": "#3B82F6",
+          "borderWidth": "1.5"
+        },
+        {
+          "name": "Error",
+          "borderColor": "#EF4444"
+        }
+      ]
+    },
+    {
+      "name": "Badge (Status)",
+      "type": "Badge",
+      "layout": "Horizontal Auto Layout",
+      "gap": "4",
+      "padding": "4px Vertical, 8px Horizontal",
+      "visualAttributes": {
+        "borderRadius": "12px",
+        "fontSize": "12",
+        "fontWeight": "600"
+      },
+      "variants": [
+        {
+          "name": "Success",
+          "background": "#10B981",
+          "textColor": "#FFFFFF"
+        },
+        {
+          "name": "Warning",
+          "background": "#F59E0B",
+          "textColor": "#FFFFFF"
+        },
+        {
+          "name": "Error",
+          "background": "#EF4444",
+          "textColor": "#FFFFFF"
+        }
+      ]
+    },
+    {
+      "name": "Wallet Card",
+      "type": "Card",
+      "layout": "Vertical Auto Layout",
+      "gap": "12",
+      "padding": "20px All",
+      "visualAttributes": {
+        "background": "Gradient (IDR: #1E3A5F to #0D1F3C)",
+        "borderRadius": "16px",
+        "elevation": "0"
+      },
+      "variants": [
+        {
+          "name": "IDR",
+          "background": "Gradient (#1E3A5F, #0D1F3C)"
+        },
+        {
+          "name": "USD",
+          "background": "Gradient (#1A3340, #0A1A20)"
+        },
+        {
+          "name": "CNY",
+          "background": "Gradient (#3D1A1A, #1A0A0A)"
+        }
+      ]
+    },
+    {
+      "name": "AppBar",
+      "type": "Header",
+      "layout": "Horizontal Auto Layout",
+      "gap": "12",
+      "padding": "0px All",
+      "visualAttributes": {
+        "background": "Transparent",
+        "elevation": "0",
+        "height": "56px"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "Transparent"
+        }
+      ]
+    },
+    {
+      "name": "Loading Skeleton",
+      "type": "Placeholder",
+      "layout": "Vertical Auto Layout",
+      "gap": "8",
+      "padding": "0",
+      "visualAttributes": {
+        "background": "#1A2340",
+        "borderRadius": "8px",
+        "animation": "Shimmer (Left to Right)"
+      },
+      "variants": [
+        {
+          "name": "Line",
+          "height": "12px"
+        },
+        {
+          "name": "Block",
+          "height": "100px"
+        }
+      ]
+    },
+    {
+      "name": "Empty State",
+      "type": "Placeholder",
+      "layout": "Vertical Auto Layout",
+      "gap": "16",
+      "padding": "32px All",
+      "visualAttributes": {
+        "textColor": "#94A3B8",
+        "iconSize": "48"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "textColor": "#94A3B8"
+        }
+      ]
+    },
+    {
+      "name": "Bottom Navigation",
+      "type": "Navigation",
+      "layout": "Horizontal Auto Layout",
+      "gap": "0",
+      "padding": "8px Vertical, 0px Horizontal",
+      "visualAttributes": {
+        "background": "Transparent",
+        "elevation": "0"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "Transparent"
+        }
+      ]
+    },
+    {
+      "name": "Transaction Item",
+      "type": "List Item",
+      "layout": "Horizontal Auto Layout",
+      "gap": "12",
+      "padding": "12px All",
+      "visualAttributes": {
+        "background": "Transparent",
+        "borderRadius": "0"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "Transparent"
+        }
+      ]
+    },
+    {
+      "name": "Numeric Keypad",
+      "type": "Input Helper",
+      "layout": "Vertical Auto Layout",
+      "gap": "8",
+      "padding": "16px All",
+      "visualAttributes": {
+        "buttonSize": "60x60",
+        "borderRadius": "16"
+      },
+      "variants": [
+        {
+          "name": "Key Button Default",
+          "background": "#1A2340"
+        },
+        {
+          "name": "Key Button Pressed",
+          "background": "#2563EB"
+        }
+      ]
+    },
+    {
+      "name": "AI Command Bar",
+      "type": "Input Helper",
+      "layout": "Horizontal Auto Layout",
+      "gap": "8",
+      "padding": "12px Horizontal, 8px Vertical",
+      "visualAttributes": {
+        "background": "#1A2340",
+        "borderRadius": "12px",
+        "border": "1px solid #1FFFFFFF"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "#1A2340"
+        },
+        {
+          "name": "Active",
+          "background": "#2563EB"
+        }
+      ]
+    },
+    {
+      "name": "Modal Dialog",
+      "type": "Dialog",
+      "layout": "Vertical Auto Layout",
+      "gap": "16",
+      "padding": "24px All",
+      "visualAttributes": {
+        "background": "#111827",
+        "borderRadius": "16px",
+        "elevation": "0"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "background": "#111827"
+        }
+      ]
+    },
+    {
+      "name": "Divider",
+      "type": "Separator",
+      "layout": "Horizontal",
+      "gap": "0",
+      "padding": "0",
+      "visualAttributes": {
+        "color": "#14FFFFFF",
+        "thickness": "0.5px"
+      },
+      "variants": [
+        {
+          "name": "Default",
+          "color": "#14FFFFFF"
+        }
+      ]
+    }
+  ],
+  "screenBlueprints": [
+    {
+      "screenName": "Home Screen",
+      "rootLayout": "Vertical Auto Layout, 0px gap, no padding",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar",
+          "layout": "Horizontal, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "ScrollView / Column",
+          "layout": "Vertical, 16px padding, 12px gap",
+          "children": [
+            {
+              "level": 2,
+              "element": "HomeHeaderWidget",
+              "layout": "Horizontal Auto Layout"
+            },
+            {
+              "level": 2,
+              "element": "WalletCardCarousel",
+              "layout": "Horizontal Scrollable"
+            },
+            {
+              "level": 2,
+              "element": "QuickActionsGrid",
+              "layout": "Grid 2x2"
+            },
+            {
+              "level": 2,
+              "element": "RecentTransactionsWidget",
+              "layout": "Vertical List"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "element": "BottomNavigationBar",
+          "layout": "Horizontal, 4 items"
+        }
+      ]
+    },
+    {
+      "screenName": "Transfer Screen",
+      "rootLayout": "Vertical Auto Layout, 0px gap",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar with Back Button",
+          "layout": "Horizontal, 16px padding, 12px gap"
+        },
+        {
+          "level": 1,
+          "element": "ScrollView / Column",
+          "layout": "Vertical, 16px padding, 16px gap",
+          "children": [
+            {
+              "level": 2,
+              "element": "SourceWalletSelector",
+              "layout": "Vertical, 12px gap"
+            },
+            {
+              "level": 2,
+              "element": "RecipientSelector",
+              "layout": "Horizontal, 12px gap"
+            },
+            {
+              "level": 2,
+              "element": "AmountInput",
+              "layout": "Horizontal, 16px padding"
+            },
+            {
+              "level": 2,
+              "element": "TransferFeeBreakdown",
+              "layout": "Vertical, 8px gap"
+            },
+            {
+              "level": 2,
+              "element": "AiSuggestionStrip",
+              "layout": "Horizontal, 8px padding"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "element": "ConfirmTransferButton",
+          "layout": "Full Width, 16px margin"
+        }
+      ]
+    },
+    {
+      "screenName": "Security PIN Entry",
+      "rootLayout": "Vertical Auto Layout, center aligned",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar",
+          "layout": "Horizontal, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "Column (Center)",
+          "layout": "Vertical, 24px gap, centered",
+          "children": [
+            {
+              "level": 2,
+              "element": "Title Text",
+              "layout": "headlineMedium"
+            },
+            {
+              "level": 2,
+              "element": "PIN Dot Indicators",
+              "layout": "Horizontal, 8px gap"
+            },
+            {
+              "level": 2,
+              "element": "NumericKeypadWidget",
+              "layout": "Grid 3x4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "screenName": "Profile Screen",
+      "rootLayout": "Vertical Auto Layout",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar with Title",
+          "layout": "Horizontal, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "ScrollView / Column",
+          "layout": "Vertical, 16px padding, 12px gap",
+          "children": [
+            {
+              "level": 2,
+              "element": "Profile Header",
+              "layout": "Vertical, center aligned, 16px gap"
+            },
+            {
+              "level": 2,
+              "element": "Divider",
+              "layout": "Full width, 0.5px"
+            },
+            {
+              "level": 2,
+              "element": "Settings List",
+              "layout": "Vertical, 8px gap"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "screenName": "QR Code Scanner",
+      "rootLayout": "Vertical Auto Layout, full height",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar (Transparent)",
+          "layout": "Horizontal overlay, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "Camera Preview",
+          "layout": "Full screen"
+        },
+        {
+          "level": 1,
+          "element": "QR Frame Overlay",
+          "layout": "Centered square, 240x240"
+        },
+        {
+          "level": 1,
+          "element": "Bottom Controls",
+          "layout": "Horizontal, 16px padding, 12px gap"
+        }
+      ]
+    },
+    {
+      "screenName": "Activity / Transactions",
+      "rootLayout": "Vertical Auto Layout",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar",
+          "layout": "Horizontal, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "ScrollView / Column",
+          "layout": "Vertical, 0px gap, 0px padding",
+          "children": [
+            {
+              "level": 2,
+              "element": "Transaction List",
+              "layout": "Vertical List, 0px gap"
+            },
+            {
+              "level": 2,
+              "element": "Transaction Items",
+              "layout": "Horizontal, 12px padding each"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "screenName": "Sign Up / Login",
+      "rootLayout": "Vertical Auto Layout, full height",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "Particle Background",
+          "layout": "Full screen animated"
+        },
+        {
+          "level": 1,
+          "element": "Column (Overlay)",
+          "layout": "Vertical, centered, 24px gap",
+          "children": [
+            {
+              "level": 2,
+              "element": "AuthLogoWidget",
+              "layout": "Centered, 60x60"
+            },
+            {
+              "level": 2,
+              "element": "AuthFormWidget",
+              "layout": "Vertical, 16px padding, 12px gap"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "screenName": "Top Up / Payment",
+      "rootLayout": "Vertical Auto Layout",
+      "hierarchy": [
+        {
+          "level": 1,
+          "element": "AppBar",
+          "layout": "Horizontal, 16px padding"
+        },
+        {
+          "level": 1,
+          "element": "ScrollView / Column",
+          "layout": "Vertical, 16px padding, 16px gap",
+          "children": [
+            {
+              "level": 2,
+              "element": "Amount Input Section",
+              "layout": "Vertical, 12px gap"
+            },
+            {
+              "level": 2,
+              "element": "Payment Method Selector",
+              "layout": "Vertical list, 8px gap"
+            },
+            {
+              "level": 2,
+              "element": "Summary Card",
+              "layout": "Card with 16px padding"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "element": "Proceed Button",
+          "layout": "Full width, bottom aligned"
+        }
+      ]
+    }
+  ]
+}

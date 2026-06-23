@@ -1,6 +1,10 @@
+import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gal/gal.dart';
 import '../../theme/app_theme.dart';
 import '../../routes/app_routes.dart';
 
@@ -13,6 +17,7 @@ class TransferSuccessScreen extends StatefulWidget {
 
 class _TransferSuccessScreenState extends State<TransferSuccessScreen>
     with TickerProviderStateMixin {
+  final GlobalKey _receiptKey = GlobalKey();
   late AnimationController _checkController;
   late AnimationController _contentController;
   late Animation<double> _checkScale;
@@ -231,140 +236,148 @@ class _TransferSuccessScreenState extends State<TransferSuccessScreen>
                         child: child,
                       ),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: AppTheme.glassBackground,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: AppTheme.success.withAlpha(60),
-                              width: 0.5,
+                    child: RepaintBoundary(
+                      key: _receiptKey,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: AppTheme.glassBackground,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: AppTheme.success.withAlpha(60),
+                                width: 0.5,
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            children: [
-                              // Header
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.successMuted,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.receipt_long_rounded,
-                                      color: AppTheme.success,
-                                      size: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    'Transfer Summary',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.textPrimary,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.successMuted,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      'Completed',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.success,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              Container(height: 0.5, color: AppTheme.separator),
-                              const SizedBox(height: 20),
-                              // Summary rows
-                              _buildSummaryRow(
-                                'Recipient',
-                                recipientName,
-                                Icons.person_rounded,
-                                AppTheme.primary,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildSummaryRow(
-                                'Amount Sent',
-                                '$amountSent $sourceCurrency',
-                                Icons.send_rounded,
-                                AppTheme.accent,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildSummaryRow(
-                                'Exchange Rate',
-                                '1 $sourceCurrency = $exchangeRate $targetCurrency',
-                                Icons.currency_exchange_rounded,
-                                AppTheme.warning,
-                              ),
-                              const SizedBox(height: 16),
-                              // Amount received highlight
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.successMuted,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: AppTheme.success.withAlpha(80),
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: Row(
+                            child: Column(
+                              children: [
+                                // Header
+                                Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(6),
+                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: AppTheme.success.withAlpha(40),
-                                        borderRadius: BorderRadius.circular(8),
+                                        color: AppTheme.successMuted,
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: const Icon(
-                                        Icons.account_balance_wallet_rounded,
+                                        Icons.receipt_long_rounded,
                                         color: AppTheme.success,
-                                        size: 14,
+                                        size: 16,
                                       ),
                                     ),
                                     const SizedBox(width: 10),
                                     Text(
-                                      'Amount Received',
+                                      'Transfer Summary',
                                       style: GoogleFonts.inter(
-                                        fontSize: 13,
-                                        color: AppTheme.textSecondary,
-                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
                                       ),
                                     ),
                                     const Spacer(),
-                                    Text(
-                                      '$amountReceived $targetCurrency',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppTheme.success,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.successMuted,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        'Completed',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.success,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 20),
+                                Container(
+                                  height: 0.5,
+                                  color: AppTheme.separator,
+                                ),
+                                const SizedBox(height: 20),
+                                // Summary rows
+                                _buildSummaryRow(
+                                  'Recipient',
+                                  recipientName,
+                                  Icons.person_rounded,
+                                  AppTheme.primary,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildSummaryRow(
+                                  'Amount Sent',
+                                  '$amountSent $sourceCurrency',
+                                  Icons.send_rounded,
+                                  AppTheme.accent,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildSummaryRow(
+                                  'Exchange Rate',
+                                  '1 $sourceCurrency = $exchangeRate $targetCurrency',
+                                  Icons.currency_exchange_rounded,
+                                  AppTheme.warning,
+                                ),
+                                const SizedBox(height: 16),
+                                // Amount received highlight
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.successMuted,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: AppTheme.success.withAlpha(80),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.success.withAlpha(40),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.account_balance_wallet_rounded,
+                                          color: AppTheme.success,
+                                          size: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Amount Received',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: AppTheme.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        '$amountReceived $targetCurrency',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.success,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -380,23 +393,7 @@ class _TransferSuccessScreenState extends State<TransferSuccessScreen>
                       children: [
                         // Download Receipt button
                         GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Receipt downloaded successfully',
-                                  style: GoogleFonts.inter(
-                                    color: AppTheme.textPrimary,
-                                  ),
-                                ),
-                                backgroundColor: AppTheme.surfaceVariant,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
-                          },
+                          onTap: _downloadReceipt,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(18),
                             child: BackdropFilter(
@@ -535,5 +532,60 @@ class _TransferSuccessScreenState extends State<TransferSuccessScreen>
         ),
       ],
     );
+  }
+
+  Future<void> _downloadReceipt() async {
+    try {
+      RenderRepaintBoundary? boundary =
+          _receiptKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      if (byteData == null) return;
+
+      Uint8List pngBytes = byteData.buffer.asUint8List();
+      await Gal.requestAccess();
+      await Gal.putImageBytes(
+        pngBytes,
+        name: 'NeoPay_Receipt_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Receipt downloaded successfully',
+              style: GoogleFonts.inter(color: AppTheme.textPrimary),
+            ),
+            backgroundColor: AppTheme.surfaceVariant,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to download receipt: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to download receipt: $e',
+              style: GoogleFonts.inter(color: AppTheme.error),
+            ),
+            backgroundColor: AppTheme.surfaceVariant,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 }

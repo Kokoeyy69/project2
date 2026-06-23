@@ -22,7 +22,9 @@ class TransferUser {
     try {
       final data = doc.data() as Map<String, dynamic>? ?? {};
       // Always use document ID as uid - never empty
-      final uid = doc.id.isNotEmpty ? doc.id : 'unknown_${DateTime.now().millisecondsSinceEpoch}';
+      final uid = doc.id.isNotEmpty
+          ? doc.id
+          : 'unknown_${DateTime.now().millisecondsSinceEpoch}';
       final user = TransferUser(
         uid: uid,
         name: data['name'] as String? ?? 'Unknown User',
@@ -30,7 +32,9 @@ class TransferUser {
         photoUrl: data['photoUrl'] as String? ?? data['photo_url'] as String?,
         handle: data['handle'] as String?,
       );
-      debugPrint('[TransferUser] Mapped user: ${user.displayName} (${user.uid})');
+      debugPrint(
+        '[TransferUser] Mapped user: ${user.displayName} (${user.uid})',
+      );
       return user;
     } catch (e, stackTrace) {
       debugPrint('[TransferUser] Error mapping document ${doc.id}: $e');
@@ -90,17 +94,50 @@ class UsersRepository {
   /// Get current user ID (may be null if not logged in)
   String? get currentUserId => _auth.currentUser?.uid;
 
+  /// Fetch multiple users by their UIDs with chunking to avoid Firestore limits
+  Future<List<TransferUser>> getUsersByIds(List<String> uids) async {
+    if (uids.isEmpty) return [];
+
+    try {
+      // Hard limit of 10 elements per whereIn query
+      const int chunkSize = 10;
+      List<List<String>> chunks = [];
+      for (var i = 0; i < uids.length; i += chunkSize) {
+        chunks.add(
+          uids.sublist(
+            i,
+            i + chunkSize > uids.length ? uids.length : i + chunkSize,
+          ),
+        );
+      }
+
+      // Execute queries in parallel
+      final queryFutures = chunks.map(
+        (chunk) =>
+            _firestore.collection('users').where('uid', whereIn: chunk).get(),
+      );
+
+      final results = await Future.wait(queryFutures);
+
+      // Flatten and map results
+      return results
+          .expand((snapshot) => snapshot.docs)
+          .map((doc) => TransferUser.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      debugPrint('[UsersRepository] Error fetching users by IDs: $e');
+      return [];
+    }
+  }
+
   /// Fetch all users except the current user
   /// Uses simple query with client-side filtering to avoid Firestore query issues
   Future<List<TransferUser>> getAllUsers() async {
     try {
       final currentUid = currentUserId;
-      
+
       // Simple fetch without any document ID filter - just limit to 50
-      final snapshot = await _firestore
-          .collection('users')
-          .limit(50)
-          .get();
+      final snapshot = await _firestore.collection('users').limit(50).get();
 
       // Client-side filtering to exclude current user
       return snapshot.docs
@@ -127,13 +164,14 @@ class UsersRepository {
 
     try {
       final currentUid = currentUserId;
+      if (currentUid != null && (currentUid.isEmpty || currentUid.contains('/') || currentUid.length > 100)) {
+        debugPrint('[UsersRepository] Invalid currentUserId blocked');
+        return [];
+      }
       final lowerQuery = query.toLowerCase().trim();
 
       // Simple fetch without document ID filter
-      final snapshot = await _firestore
-          .collection('users')
-          .limit(50)
-          .get();
+      final snapshot = await _firestore.collection('users').limit(50).get();
 
       // Client-side search and filtering
       return snapshot.docs
@@ -142,11 +180,13 @@ class UsersRepository {
             // Filter out current user and empty uids
             if (user.uid.isEmpty) return false;
             if (currentUid != null && user.uid == currentUid) return false;
-            
+
             // Search in name, email, and handle
             final nameMatch = user.name.toLowerCase().contains(lowerQuery);
-            final emailMatch = user.email?.toLowerCase().contains(lowerQuery) ?? false;
-            final handleMatch = user.handle?.toLowerCase().contains(lowerQuery) ?? false;
+            final emailMatch =
+                user.email?.toLowerCase().contains(lowerQuery) ?? false;
+            final handleMatch =
+                user.handle?.toLowerCase().contains(lowerQuery) ?? false;
             return nameMatch || emailMatch || handleMatch;
           })
           .toList();
@@ -158,14 +198,14 @@ class UsersRepository {
 
   /// Get user by UID
   Future<TransferUser?> getUserByUid(String uid) async {
-    // Guard clause: empty uid
-    if (uid.isEmpty) {
-      debugPrint('[UsersRepository] Cannot fetch user with empty UID');
+    // Guard clause: empty uid or contains invalid path characters like '/' or too long
+    if (uid.isEmpty || uid.contains('/') || uid.length > 100) {
+      debugPrint('[UsersRepository] Cannot fetch user with empty/invalid UID: "$uid"');
       return null;
     }
 
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
+      final doc = await _firestore.collection('users').doc(uid.trim()).get();
       if (doc.exists) {
         return TransferUser.fromFirestore(doc);
       }
@@ -205,19 +245,15 @@ class UsersRepository {
   Stream<List<TransferUser>> watchUsers() {
     final currentUid = currentUserId;
 
-    return _firestore
-        .collection('users')
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => TransferUser.fromFirestore(doc))
-              .where((user) {
-                // Filter out current user and empty uids
-                if (user.uid.isEmpty) return false;
-                if (currentUid != null && user.uid == currentUid) return false;
-                return true;
-              })
-              .toList();
-        });
+    return _firestore.collection('users').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => TransferUser.fromFirestore(doc)).where((
+        user,
+      ) {
+        // Filter out current user and empty uids
+        if (user.uid.isEmpty) return false;
+        if (currentUid != null && user.uid == currentUid) return false;
+        return true;
+      }).toList();
+    });
   }
 }

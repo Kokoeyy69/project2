@@ -6,6 +6,7 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../../services/hive_cache_service.dart';
+import 'credit_card_input_screen.dart';
 
 class TopUpScreen extends StatefulWidget {
   const TopUpScreen({super.key});
@@ -19,11 +20,32 @@ class _TopUpScreenState extends State<TopUpScreen> {
   bool _isProcessing = false;
 
   final List<int> _quickAmounts = [10000, 25000, 50000, 100000, 250000, 500000];
+  final List<String> _bankList = ['BCA VA', 'Mandiri VA', 'BNI VA', 'Kartu Kredit'];
+  String _selectedMethod = 'BCA VA';
+  int _selectedAmount = 0;
+
+  int get _adminFee {
+    if (_selectedMethod.contains('VA') || _selectedMethod.contains('Virtual Account')) {
+      return 1000;
+    } else if (_selectedMethod == 'Kartu Kredit') {
+      return (_selectedAmount * 0.02).toInt();
+    }
+    return 0;
+  }
+
+  int get _totalBayar => _selectedAmount + _adminFee;
 
   @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
+  }
+
+  void _onManualAmountChanged(String value) {
+    final parsed = int.tryParse(value);
+    setState(() {
+      _selectedAmount = parsed ?? 0;
+    });
   }
 
   Future<void> _processTopUp(int amount) async {
@@ -125,6 +147,7 @@ class _TopUpScreenState extends State<TopUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final formatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -188,6 +211,7 @@ class _TopUpScreenState extends State<TopUpScreen> {
               TextField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
+                onChanged: _onManualAmountChanged,
                 style: GoogleFonts.inter(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -234,16 +258,24 @@ class _TopUpScreenState extends State<TopUpScreen> {
                 itemCount: _quickAmounts.length,
                 itemBuilder: (context, index) {
                   final amount = _quickAmounts[index];
-                  final formatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+                  final isSelected = _selectedAmount == amount;
                   return GestureDetector(
                     onTap: () {
-                      _amountController.text = amount.toString();
+                      setState(() {
+                        _selectedAmount = amount;
+                        _amountController.text = amount.toString();
+                      });
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppTheme.glassBackground,
+                        color: isSelected
+                            ? AppTheme.success.withAlpha(30)
+                            : AppTheme.glassBackground,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppTheme.glassBorder, width: 0.5),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.success : AppTheme.glassBorder,
+                          width: isSelected ? 2 : 0.5,
+                        ),
                       ),
                       child: Center(
                         child: Text(
@@ -251,33 +283,115 @@ class _TopUpScreenState extends State<TopUpScreen> {
                           style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary),
+                              color: isSelected ? AppTheme.success : AppTheme.textPrimary),
                         ),
                       ),
                     ),
                   );
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              // Payment method selection
+              Text('Pilih Metode Pembayaran',
+                  style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary)),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 2.5,
+                ),
+                itemCount: _bankList.length,
+                itemBuilder: (context, index) {
+                  final method = _bankList[index];
+                  final isSelected = _selectedMethod == method;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedMethod = method),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.success.withAlpha(30)
+                            : AppTheme.glassBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.success : AppTheme.glassBorder,
+                          width: isSelected ? 2 : 0.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          method,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? AppTheme.success : AppTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              // Fee breakdown
+              if (_selectedAmount > 0) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppTheme.glassBorder,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildRow('Subtotal', formatter.format(_selectedAmount)),
+                      const SizedBox(height: 8),
+                      _buildRow('Biaya Admin', formatter.format(_adminFee)),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(color: AppTheme.glassBorder),
+                      ),
+                      _buildRow(
+                        'Total Bayar',
+                        formatter.format(_totalBayar),
+                        isTotal: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
               // Confirm button
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isProcessing
+                  onPressed: _isProcessing || _selectedAmount < 10000
                       ? null
                       : () {
-                          final amount = int.tryParse(_amountController.text);
-                          if (amount == null || amount <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Masukkan nominal yang valid'),
-                                backgroundColor: Colors.red,
+                          if (_selectedMethod == 'Kartu Kredit') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CreditCardInputScreen(
+                                  totalAmount: _totalBayar,
+                                ),
                               ),
                             );
-                            return;
+                          } else {
+                            _processTopUp(_selectedAmount);
                           }
-                          _processTopUp(amount);
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.success,
@@ -287,7 +401,7 @@ class _TopUpScreenState extends State<TopUpScreen> {
                   ),
                   child: _isProcessing
                       ? const SpinKitFadingCircle(color: Colors.white, size: 24)
-                      : Text('Konfirmasi Top Up',
+                      : Text('Lanjut',
                           style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -308,7 +422,7 @@ class _TopUpScreenState extends State<TopUpScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Saldo akan langsung masuk setelah konfirmasi. Tidak ada biaya admin.',
+                        'Min. top up Rp 10.000. Biaya VA Rp 1.000, Kartu Kredit 2%.',
                         style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppTheme.success,
@@ -322,6 +436,30 @@ class _TopUpScreenState extends State<TopUpScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRow(String label, String value, {bool isTotal = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: isTotal ? 16 : 14,
+            fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
+            color: isTotal ? AppTheme.textPrimary : AppTheme.textSecondary,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: isTotal ? 16 : 14,
+            fontWeight: isTotal ? FontWeight.w700 : FontWeight.w600,
+            color: isTotal ? AppTheme.success : AppTheme.textPrimary,
+          ),
+        ),
+      ],
     );
   }
 }

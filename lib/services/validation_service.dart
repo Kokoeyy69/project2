@@ -7,12 +7,12 @@ class ValidationResult {
   final String? warningMessage;
 
   const ValidationResult.valid()
-      : isValid = true,
-        errorMessage = null,
-        warningMessage = null;
+    : isValid = true,
+      errorMessage = null,
+      warningMessage = null;
 
   const ValidationResult.invalid(this.errorMessage, {this.warningMessage})
-      : isValid = false;
+    : isValid = false;
 }
 
 /// Enterprise-grade validation service for anti-fraud and input validation
@@ -22,14 +22,13 @@ class ValidationService {
   static const double _maxTransferAmount = 50000000;
   static const double _minTopUpAmount = 10000;
   static const double _maxTopUpAmount = 10000000;
+  static const _emailRegex = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
 
   /// Validate transfer amount
   static ValidationResult validateTransferAmount(double amount) {
     // Anti-negative check
     if (amount <= 0) {
-      return const ValidationResult.invalid(
-        'Nominal harus lebih dari 0',
-      );
+      return const ValidationResult.invalid('Nominal harus lebih dari 0');
     }
 
     // Minimum check
@@ -71,7 +70,11 @@ class ValidationService {
   }
 
   /// Validate balance for transaction (Double-spend protection)
-  static ValidationResult validateBalance(double balance, double amount, String transactionType) {
+  static ValidationResult validateBalance(
+    double balance,
+    double amount,
+    String transactionType,
+  ) {
     if (balance < amount) {
       return ValidationResult.invalid(
         'Saldo tidak mencukupi. Saldo Anda: Rp ${_formatCurrency(balance)}',
@@ -91,9 +94,14 @@ class ValidationService {
   }
 
   /// Validate recipient (anti-self-transfer)
-  static ValidationResult validateRecipient(String senderUid, String recipientUid) {
+  static ValidationResult validateRecipient(
+    String senderUid,
+    String recipientUid,
+  ) {
     if (senderUid == recipientUid) {
-      return const ValidationResult.invalid('Tidak dapat transfer ke diri sendiri');
+      return const ValidationResult.invalid(
+        'Tidak dapat transfer ke diri sendiri',
+      );
     }
 
     if (recipientUid.isEmpty) {
@@ -151,10 +159,37 @@ class ValidationService {
   }
 
   static String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0).replaceAllMapped(
+    return amount
+        .toStringAsFixed(0)
+        .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]}.',
         );
+  }
+
+  static int evaluatePasswordStrength(String password) {
+    int strength = 0;
+
+    // Minimum 8 characters
+    if (password.length >= 8) strength += 1;
+
+    // Contains uppercase letter
+    if (password.contains(RegExp(r'[A-Z]'))) strength += 1;
+
+    // Contains lowercase letter
+    if (password.contains(RegExp(r'[a-z]'))) strength += 1;
+
+    // Contains number
+    if (password.contains(RegExp(r'[0-9]'))) strength += 1;
+
+    // Contains special character
+    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength += 1;
+
+    return strength;
+  }
+
+  static bool isValidEmail(String email) {
+    return RegExp(_emailRegex).hasMatch(email);
   }
 }
 

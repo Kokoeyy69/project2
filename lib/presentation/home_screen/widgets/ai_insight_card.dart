@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../theme/app_theme.dart';
 import '../../../core/services/gemini_ai_service.dart';
+import '../../../core/di/locator.dart';
 import '../../../services/hive_cache_service.dart';
 
 class AiInsightCard extends StatefulWidget {
@@ -41,21 +42,35 @@ class _AiInsightCardState extends State<AiInsightCard> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final snapshot = await FirebaseFirestore.instance
+      // Fetch outgoing and incoming transactions separately to avoid Filter.or
+      final outgoingSnapshot = await FirebaseFirestore.instance
           .collection('transactions')
-          .where(Filter.or(
-            Filter('senderUid', isEqualTo: user.uid),
-            Filter('recipientUid', isEqualTo: user.uid),
-          ))
+          .where('sender_uid', isEqualTo: user.uid)
           .orderBy('timestamp', descending: true)
           .limit(5)
           .get();
 
-      final transactions = snapshot.docs.map((d) => d.data()).toList();
-      final insight = await GeminiAiService.instance.analyzeTransactions(transactions);
+      final incomingSnapshot = await FirebaseFirestore.instance
+          .collection('transactions')
+          .where('recipient_uid', isEqualTo: user.uid)
+          .orderBy('timestamp', descending: true)
+          .limit(5)
+          .get();
+
+      // Combine and deduplicate
+      final combinedDocs = [...outgoingSnapshot.docs, ...incomingSnapshot.docs];
+      final seenIds = <String>{};
+      final uniqueDocs = combinedDocs
+          .where((doc) => seenIds.add(doc.id))
+          .toList();
+
+      final transactions = uniqueDocs.map((d) => d.data()).toList();
+      final insight = await locator<GeminiAiService>().analyzeTransactions(
+        transactions,
+      );
 
       HiveCacheService.set('ai_insight', insight);
-      
+
       if (mounted) {
         setState(() {
           _insight = insight;
@@ -65,7 +80,8 @@ class _AiInsightCardState extends State<AiInsightCard> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _insight = 'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
+          _insight =
+              'Tetap pantau pengeluaran lo ya biar tujuan cepat tercapai!';
           _isLoading = false;
         });
       }
@@ -86,7 +102,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
             color: AppTheme.primary.withAlpha(25),
             blurRadius: 15,
             spreadRadius: 2,
-          )
+          ),
         ],
       ),
       child: Column(
@@ -97,7 +113,11 @@ class _AiInsightCardState extends State<AiInsightCard> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 20),
+                  const Icon(
+                    Icons.auto_awesome,
+                    color: AppTheme.primary,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Neo Insight',
@@ -110,10 +130,16 @@ class _AiInsightCardState extends State<AiInsightCard> {
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, size: 20, color: AppTheme.primary),
+                icon: const Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: AppTheme.primary,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                onPressed: _isLoading ? null : () => _loadInsight(forceRefresh: true),
+                onPressed: _isLoading
+                    ? null
+                    : () => _loadInsight(forceRefresh: true),
               ),
             ],
           ),
@@ -122,7 +148,10 @@ class _AiInsightCardState extends State<AiInsightCard> {
               ? const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 )
               : Text(

@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/app_theme.dart';
+import '../../../routes/app_routes.dart';
 
 class QuickActionsGridWidget extends StatelessWidget {
   final VoidCallback onTransferTap;
@@ -62,10 +64,13 @@ class QuickActionsGridWidget extends StatelessWidget {
         onTap: onTransferTap,
       ),
       _ActionItem(
-        icon: Icons.qr_code_scanner_rounded,
-        label: 'Scan QR',
+        icon: Icons.my_location_rounded,
+        label: 'Nearby',
         color: AppTheme.accent,
-        onTap: () {},
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.pushNamed(context, AppRoutes.locatorScreen);
+        },
       ),
       _ActionItem(
         icon: Icons.add_circle_outline_rounded,
@@ -77,7 +82,9 @@ class QuickActionsGridWidget extends StatelessWidget {
         icon: Icons.currency_exchange_rounded,
         label: 'Rates',
         color: AppTheme.warning,
-        onTap: () {},
+        onTap: () {
+          Navigator.pushNamed(context, AppRoutes.exchangeRatesScreen);
+        },
       ),
     ];
 

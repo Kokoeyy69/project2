@@ -12,7 +12,9 @@ class NotificationService {
     if (_isInitialized) return;
 
     // Initialize local notifications
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -117,18 +119,38 @@ class NotificationService {
 
 /// Helper to format transaction notification messages
 class TransactionNotification {
-  static String formatTransferSent(String recipientName, double amount, String currency) {
-    final formatter = NumberFormat.currency(locale: 'id_ID', symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '), decimalDigits: 0);
+  static String formatTransferSent(
+    String recipientName,
+    double amount,
+    String currency,
+  ) {
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '),
+      decimalDigits: 0,
+    );
     return 'Berhasil! Dana ${formatter.format(amount)} telah terkirim ke $recipientName';
   }
 
-  static String formatTransferReceived(String senderName, double amount, String currency) {
-    final formatter = NumberFormat.currency(locale: 'id_ID', symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '), decimalDigits: 0);
+  static String formatTransferReceived(
+    String senderName,
+    double amount,
+    String currency,
+  ) {
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '),
+      decimalDigits: 0,
+    );
     return 'Dana masuk! ${formatter.format(amount)} dari $senderName';
   }
 
   static String formatTopUp(double amount, String currency) {
-    final formatter = NumberFormat.currency(locale: 'id_ID', symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '), decimalDigits: 0);
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: currency == 'USD' ? '\$' : (currency == 'CNY' ? '¥ ' : 'Rp '),
+      decimalDigits: 0,
+    );
     return 'Top up berhasil! Saldo bertambah ${formatter.format(amount)}';
   }
 }

@@ -20,7 +20,8 @@ class SourceWalletSelectorWidget extends StatefulWidget {
       _SourceWalletSelectorWidgetState();
 }
 
-class _SourceWalletSelectorWidgetState extends State<SourceWalletSelectorWidget> {
+class _SourceWalletSelectorWidgetState
+    extends State<SourceWalletSelectorWidget> {
   double _balanceIdr = 0;
   double _balanceUsd = 0;
   double _balanceCny = 0;
@@ -126,7 +127,10 @@ class _SourceWalletSelectorWidgetState extends State<SourceWalletSelectorWidget>
                     final w = _wallets[index];
                     final isSelected = index == widget.selectedIndex;
                     final balances = [_balanceIdr, _balanceUsd, _balanceCny];
-                    final displayBalance = _formatBalance(balances[index], w.currency);
+                    final displayBalance = _formatBalance(
+                      balances[index],
+                      w.currency,
+                    );
                     return Expanded(
                       child: GestureDetector(
                         onTap: () => widget.onSelected(index),
@@ -162,7 +166,10 @@ class _SourceWalletSelectorWidgetState extends State<SourceWalletSelectorWidget>
                           ),
                           child: Column(
                             children: [
-                              Text(w.flag, style: const TextStyle(fontSize: 20)),
+                              Text(
+                                w.flag,
+                                style: const TextStyle(fontSize: 20),
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 w.currency,

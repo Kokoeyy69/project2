@@ -7,7 +7,7 @@ import 'package:neopay_ai/core/providers/currency_provider.dart';
 import 'package:neopay_ai/services/hive_cache_service.dart';
 
 /// HomeViewModel manages the user's balance and currency conversions.
-/// 
+///
 /// The base currency is IDR (stored in Firestore as 'balance').
 /// USD and CNY balances are calculated dynamically using CurrencyProvider.
 class HomeViewModel extends ChangeNotifier {
@@ -17,7 +17,9 @@ class HomeViewModel extends ChangeNotifier {
   bool _isLoading = true;
   bool _hasError = false;
   String? _error;
-  
+  int _currentNavIndex = 0;
+  int _currentCardIndex = 0;
+
   final CurrencyProvider _currencyProvider;
 
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
@@ -28,9 +30,11 @@ class HomeViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get hasError => _hasError;
   String? get error => _error;
+  int get currentNavIndex => _currentNavIndex;
+  int get currentCardIndex => _currentCardIndex;
 
   HomeViewModel({CurrencyProvider? currencyProvider})
-      : _currencyProvider = currencyProvider ?? CurrencyProvider();
+    : _currencyProvider = currencyProvider ?? CurrencyProvider();
 
   /// Start listening to Firestore balance updates
   Future<void> start() async {
@@ -71,10 +75,10 @@ class HomeViewModel extends ChangeNotifier {
             final data = snap.data();
             // Only read base balance (IDR) from Firestore
             _balance = (data?['balance'] as num?)?.toDouble() ?? 0.0;
-            
+
             // Calculate USD and CNY dynamically using CurrencyProvider
             _recalculateConvertedBalances();
-            
+
             try {
               await HiveCacheService.setCachedBalance(_balance);
             } catch (_) {}
@@ -107,7 +111,7 @@ class HomeViewModel extends ChangeNotifier {
     try {
       // Refresh exchange rates if stale
       await _currencyProvider.refreshIfStale();
-      
+
       final snap = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -115,10 +119,10 @@ class HomeViewModel extends ChangeNotifier {
       final data = snap.data();
       // Only read base balance (IDR) from Firestore
       _balance = (data?['balance'] as num?)?.toDouble() ?? 0.0;
-      
+
       // Calculate USD and CNY dynamically
       _recalculateConvertedBalances();
-      
+
       await HiveCacheService.setCachedBalance(_balance);
       _hasError = false;
       _error = null;
@@ -148,6 +152,18 @@ class HomeViewModel extends ChangeNotifier {
   /// Get the current exchange rate between two currencies
   double? getExchangeRate(String from, String to) {
     return _currencyProvider.getRate(from, to);
+  }
+
+  /// Update navigation index
+  void setCurrentNavIndex(int index) {
+    _currentNavIndex = index;
+    notifyListeners();
+  }
+
+  /// Update card carousel index
+  void setCurrentCardIndex(int index) {
+    _currentCardIndex = index;
+    notifyListeners();
   }
 
   @override

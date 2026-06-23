@@ -1,0 +1,43 @@
+import 'package:neopay_ai/core/services/gemini_ai_service.dart';
+
+/// Replacement _send() method for lib/presentation/ai_chat/ai_chat_screen.dart
+Future<void> _send() async {
+  final text = _ctl.text.trim();
+  if (text.isEmpty) return;
+
+  setState(() {
+    _messages.add({'role': 'user', 'text': text});
+    _ctl.clear();
+    _isSending = true;
+  });
+
+  try {
+    // Use real Gemini service
+    final gemini = GeminiAiService.instance;
+    final chatMsg = await gemini.sendMessage(text);
+
+    // ChatMessage.content contains AI reply text
+    final replyText = chatMsg.content ?? 'Tidak ada respon';
+
+    setState(() {
+      _messages.add({'role': 'assistant', 'text': replyText});
+    });
+
+    // If AI returned a transfer intent, trigger security confirmation
+    final intent = chatMsg.transferIntent;
+    if (intent != null) {
+      final amount = intent.amount;
+      final recipient = intent.recipientName ?? 'Tidak diketahui';
+      if (amount > 0) {
+        // Existing UI expects an int amount
+        _showTransferConfirmationDialog(recipient, amount.toInt());
+      }
+    }
+  } catch (e) {
+    setState(() {
+      _messages.add({'role': 'assistant', 'text': 'Error: ${e.toString()}'});
+    });
+  } finally {
+    if (mounted) setState(() => _isSending = false);
+  }
+}

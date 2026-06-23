@@ -1,21 +1,12 @@
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../../../theme/app_theme.dart';
+import '../auth_view_model.dart';
 
 class AuthFormWidget extends StatefulWidget {
-  final bool isLogin;
-  final VoidCallback onToggleMode;
-  final VoidCallback onSuccess;
-
-  const AuthFormWidget({
-    super.key,
-    required this.isLogin,
-    required this.onToggleMode,
-    required this.onSuccess,
-  });
+  const AuthFormWidget({super.key});
 
   @override
   State<AuthFormWidget> createState() => _AuthFormWidgetState();
@@ -24,21 +15,8 @@ class AuthFormWidget extends StatefulWidget {
 class _AuthFormWidgetState extends State<AuthFormWidget>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _phoneController = TextEditingController();
-
-  bool _passwordVisible = false;
-  bool _confirmPasswordVisible = false;
-  bool _rememberMe = false;
-  bool _isLoading = false;
-  bool _biometricEnabled = false;
-  String? _errorMessage;
-
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
   late AnimationController _formAnimController;
   late Animation<double> _formAnimation;
 
@@ -54,99 +32,57 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
       curve: Curves.easeOutCubic,
     );
     _formAnimController.forward();
+
+    // Set up focus listeners
+    _emailFocusNode.addListener(_handleFocusChange);
+    _passwordFocusNode.addListener(_handleFocusChange);
+  }
+
+  void _handleFocusChange() {
+    if (_emailFocusNode.hasFocus || _passwordFocusNode.hasFocus) {
+      Provider.of<AuthViewModel>(context, listen: false).setFocused(true);
+    } else {
+      Provider.of<AuthViewModel>(context, listen: false).setFocused(false);
+    }
   }
 
   @override
   void didUpdateWidget(AuthFormWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isLogin != widget.isLogin) {
-      _formAnimController.forward(from: 0.0);
-      _errorMessage = null;
-    }
+    // In Provider mode, we'll watch the viewModel's isLogin state
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _nameController.dispose();
-    _confirmPasswordController.dispose();
-    _phoneController.dispose();
     _formAnimController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      if (widget.isLogin) {
-        await _auth.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-      } else {
-        UserCredential userCredential = await _auth
-            .createUserWithEmailAndPassword(
-              email: _emailController.text.trim(),
-              password: _passwordController.text,
-            );
-        String newUid = userCredential.user!.uid;
-
-        // Generate a handle from the name (lowercase, no spaces)
-        final name = _nameController.text.trim();
-        final handle = name.toLowerCase().replaceAll(' ', '.');
-
-        await FirebaseFirestore.instance.collection('users').doc(newUid).set({
-          'uid': newUid, // Store uid in document for easy access
-          'name': name,
-          'email': _emailController.text.trim().toLowerCase(),
-          'handle': handle,
-          'photoUrl': null, // No photo on registration
-          'balance': 0, // Initialize balance to 0
-          'balance_usd': 0,
-          'balance_cny': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        debugPrint(
-          '[Auth] Created user document for $newUid with handle: $handle',
-        );
-      }
-      if (!mounted) return;
-      widget.onSuccess();
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = e.message;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = "Gagal membuat dokumen database: $e";
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+  Future<void> _submit(AuthViewModel viewModel) async {
+    bool success = false;
+    if (viewModel.isLogin) {
+      success = await viewModel.submitLogin();
+    } else {
+      success = await viewModel.submitRegister();
     }
-  }
 
-  void _autofillDemo() {
-    setState(() {
-      _emailController.text = 'test@test.com';
-      _passwordController.text = 'password';
-      _errorMessage = null;
-    });
+    if (success && mounted) {
+      // onSuccess callback removed - routing handled by global listener
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final viewModel = Provider.of<AuthViewModel>(context);
+
+    // Trigger animation on mode toggle
+    if (viewModel.errorMessage == null && !_formAnimController.isAnimating) {
+      // This is a bit hacky for a widget that depends on external state
+      // but for now we'll keep the animation logic local
+    }
+
     return FadeTransition(
       opacity: _formAnimation,
       child: SlideTransition(
@@ -171,100 +107,87 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildTabSwitcher(),
+                      _buildTabSwitcher(viewModel),
                       const SizedBox(height: 24),
-                      if (!widget.isLogin) ...[
+                      if (!viewModel.isLogin) ...[
                         _buildGlassField(
-                          controller: _nameController,
+                          controller: viewModel.nameController,
                           label: 'Full Name',
                           hint: 'Rania Kusuma',
                           icon: Icons.person_outline_rounded,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Please enter your full name'
-                              : null,
                         ),
                         const SizedBox(height: 14),
                         _buildGlassField(
-                          controller: _phoneController,
+                          controller: viewModel.phoneController,
                           label: 'Phone Number',
                           hint: '+62 812 3456 7890',
                           icon: Icons.phone_outlined,
                           keyboardType: TextInputType.phone,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Please enter your phone number'
-                              : null,
                         ),
                         const SizedBox(height: 14),
                       ],
                       _buildGlassField(
-                        controller: _emailController,
+                        controller: viewModel.emailController,
                         label: 'Email Address',
                         hint: 'you@neopay-api-eight.vercel.app',
                         icon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Please enter your email';
-                          }
-                          if (!v.contains('@')) return 'Enter a valid email';
-                          return null;
-                        },
+                        focusNode: _emailFocusNode,
+                        onChanged: (value) => viewModel.onEmailChanged(value),
                       ),
                       const SizedBox(height: 14),
                       _buildPasswordField(
-                        controller: _passwordController,
+                        controller: viewModel.passwordController,
                         label: 'Password',
-                        visible: _passwordVisible,
-                        onToggle: () => setState(
-                          () => _passwordVisible = !_passwordVisible,
-                        ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Please enter your password';
-                          }
-                          if (v.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                          return null;
-                        },
+                        visible: viewModel.passwordVisible,
+                        onToggle: viewModel.togglePasswordVisibility,
+                        focusNode: _passwordFocusNode,
+                        onChanged: (value) => viewModel.onPasswordChanged(value),
                       ),
-                      if (!widget.isLogin) ...[
+                      if (!viewModel.isLogin) ...[
                         const SizedBox(height: 14),
                         _buildPasswordField(
-                          controller: _confirmPasswordController,
+                          controller: viewModel.confirmPasswordController,
                           label: 'Confirm Password',
-                          visible: _confirmPasswordVisible,
-                          onToggle: () => setState(
-                            () => _confirmPasswordVisible =
-                                !_confirmPasswordVisible,
-                          ),
-                          validator: (v) {
-                            if (v != _passwordController.text) {
-                              return 'Passwords do not match';
-                            }
-                            return null;
-                          },
+                          visible: viewModel.confirmPasswordVisible,
+                          onToggle: viewModel.toggleConfirmPasswordVisibility,
                         ),
+                        if (viewModel.emailError != null) ...[
+                          const SizedBox(height: 8),
+                          _buildErrorBanner(viewModel.emailError!),
+                        ],
+                        if (viewModel.passwordError != null) ...[
+                          const SizedBox(height: 8),
+                          _buildErrorBanner(viewModel.passwordError!),
+                        ],
                       ],
-                      if (widget.isLogin) ...[
+                      if (viewModel.isLogin) ...[
                         const SizedBox(height: 14),
-                        _buildLoginOptions(),
+                        _buildLoginOptions(viewModel),
+                        if (viewModel.emailError != null) ...[
+                          const SizedBox(height: 8),
+                          _buildErrorBanner(viewModel.emailError!),
+                        ],
+                        if (viewModel.passwordError != null) ...[
+                          const SizedBox(height: 8),
+                          _buildErrorBanner(viewModel.passwordError!),
+                        ],
                       ],
-                      if (_errorMessage != null) ...[
+                      if (viewModel.errorMessage != null) ...[
                         const SizedBox(height: 14),
-                        _buildErrorBanner(),
+                        _buildErrorBanner(viewModel.errorMessage!),
                       ],
                       const SizedBox(height: 20),
-                      _buildSubmitButton(),
-                      if (widget.isLogin) ...[
+                      _buildSubmitButton(viewModel),
+                      if (viewModel.isLogin) ...[
                         const SizedBox(height: 16),
-                        _buildBiometricButton(),
+                        _buildBiometricButton(viewModel),
                       ],
                       const SizedBox(height: 20),
                       _buildDivider(),
                       const SizedBox(height: 20),
-                      _buildDemoCredentials(),
-                      if (!widget.isLogin) ...[
+                      _buildDemoCredentials(viewModel),
+                      if (!viewModel.isLogin) ...[
                         const SizedBox(height: 20),
                         _buildTermsText(),
                       ],
@@ -279,7 +202,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     );
   }
 
-  Widget _buildTabSwitcher() {
+  Widget _buildTabSwitcher(AuthViewModel viewModel) {
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -289,17 +212,22 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
       ),
       child: Row(
         children: [
-          _buildTab('Sign In', widget.isLogin),
-          _buildTab('Create Account', !widget.isLogin),
+          _buildTab('Sign In', viewModel.isLogin, viewModel),
+          _buildTab('Create Account', !viewModel.isLogin, viewModel),
         ],
       ),
     );
   }
 
-  Widget _buildTab(String label, bool isActive) {
+  Widget _buildTab(String label, bool isActive, AuthViewModel viewModel) {
     return Expanded(
       child: GestureDetector(
-        onTap: isActive ? null : widget.onToggleMode,
+        onTap: isActive
+            ? null
+            : () {
+                viewModel.toggleMode();
+                _formAnimController.forward(from: 0.0);
+              },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.all(3),
@@ -328,7 +256,8 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     required String hint,
     required IconData icon,
     TextInputType? keyboardType,
-    String? Function(String?)? validator,
+    FocusNode? focusNode,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,7 +276,8 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
           hint: hint,
           icon: icon,
           keyboardType: keyboardType,
-          validator: validator,
+          focusNode: focusNode,
+          onChanged: onChanged,
         ),
       ],
     );
@@ -358,7 +288,8 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     required String label,
     required bool visible,
     required VoidCallback onToggle,
-    String? Function(String?)? validator,
+    FocusNode? focusNode,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,17 +318,77 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
               color: AppTheme.textMuted,
             ),
           ),
-          validator: validator,
+          focusNode: focusNode,
+          onChanged: onChanged,
+        ),
+        if (focusNode == _passwordFocusNode && onChanged != null) ...[
+          const SizedBox(height: 8),
+          _buildPasswordStrengthBar(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPasswordStrengthBar() {
+    final viewModel = Provider.of<AuthViewModel>(context);
+    final strength = viewModel.passwordStrength;
+
+    // Determine colors based on strength
+    Color getColor(int index) {
+      if (strength > index) {
+        if (strength <= 2) return AppTheme.error;
+        if (strength <= 3) return AppTheme.warning;
+        return AppTheme.success;
+      }
+      return AppTheme.glassBorder;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Password Strength',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.textMuted,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: List.generate(4, (index) {
+            return Expanded(
+              child: Container(
+                height: 4,
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(
+                  color: getColor(index),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          strength == 0 ? 'Enter password' :
+          strength <= 2 ? 'Weak' :
+          strength <= 3 ? 'Medium' : 'Strong',
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textMuted,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildLoginOptions() {
+  Widget _buildLoginOptions(AuthViewModel viewModel) {
     return Row(
       children: [
         GestureDetector(
-          onTap: () => setState(() => _rememberMe = !_rememberMe),
+          onTap: viewModel.toggleRememberMe,
           child: Row(
             children: [
               AnimatedContainer(
@@ -405,14 +396,18 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
                 width: 18,
                 height: 18,
                 decoration: BoxDecoration(
-                  color: _rememberMe ? AppTheme.primary : Colors.transparent,
+                  color: viewModel.rememberMe
+                      ? AppTheme.primary
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(5),
                   border: Border.all(
-                    color: _rememberMe ? AppTheme.primary : AppTheme.textMuted,
+                    color: viewModel.rememberMe
+                        ? AppTheme.primary
+                        : AppTheme.textMuted,
                     width: 1.5,
                   ),
                 ),
-                child: _rememberMe
+                child: viewModel.rememberMe
                     ? const Icon(
                         Icons.check_rounded,
                         size: 12,
@@ -453,7 +448,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     );
   }
 
-  Widget _buildErrorBanner() {
+  Widget _buildErrorBanner(String message) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -471,7 +466,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _errorMessage!,
+              message,
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -484,11 +479,11 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     );
   }
 
-  Widget _buildSubmitButton() {
+  Widget _buildSubmitButton(AuthViewModel viewModel) {
     return SizedBox(
       height: 52,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _submit,
+        onPressed: viewModel.isLoading ? null : () => _submit(viewModel),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.primary,
           foregroundColor: Colors.white,
@@ -500,7 +495,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child: _isLoading
+          child: viewModel.isLoading
               ? const SizedBox(
                   key: ValueKey('loading'),
                   width: 22,
@@ -512,7 +507,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
                 )
               : Text(
                   key: const ValueKey('label'),
-                  widget.isLogin ? 'Sign In to NeoPay AI' : 'Create Account',
+                  viewModel.isLogin ? 'Sign In to NeoPay AI' : 'Create Account',
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -524,16 +519,16 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     );
   }
 
-  Widget _buildBiometricButton() {
+  Widget _buildBiometricButton(AuthViewModel viewModel) {
     return GestureDetector(
-      onTap: () => setState(() => _biometricEnabled = !_biometricEnabled),
+      onTap: viewModel.toggleBiometric,
       child: Container(
         height: 48,
         decoration: BoxDecoration(
           color: AppTheme.glassBackground,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _biometricEnabled
+            color: viewModel.biometricEnabled
                 ? AppTheme.primary.withAlpha(102)
                 : AppTheme.glassBorder,
             width: 0.8,
@@ -545,7 +540,9 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
             Icon(
               Icons.fingerprint_rounded,
               size: 22,
-              color: _biometricEnabled ? AppTheme.primary : AppTheme.textMuted,
+              color: viewModel.biometricEnabled
+                  ? AppTheme.primary
+                  : AppTheme.textMuted,
             ),
             const SizedBox(width: 8),
             Text(
@@ -553,7 +550,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: _biometricEnabled
+                color: viewModel.biometricEnabled
                     ? AppTheme.primary
                     : AppTheme.textSecondary,
               ),
@@ -584,7 +581,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
     );
   }
 
-  Widget _buildDemoCredentials() {
+  Widget _buildDemoCredentials(AuthViewModel viewModel) {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.primaryMuted.withAlpha(20),
@@ -643,7 +640,7 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
               width: double.infinity,
               height: 38,
               child: ElevatedButton(
-                onPressed: _autofillDemo,
+                onPressed: viewModel.setDemoCredentials,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary.withAlpha(38),
                   foregroundColor: AppTheme.primary,
@@ -739,14 +736,15 @@ class _AuthFormWidgetState extends State<AuthFormWidget>
   }
 }
 
-class _GlassTextField extends StatefulWidget {
+class _GlassTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final IconData icon;
   final TextInputType? keyboardType;
   final bool obscureText;
   final Widget? suffixIcon;
-  final String? Function(String?)? validator;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
 
   const _GlassTextField({
     required this.controller,
@@ -755,20 +753,15 @@ class _GlassTextField extends StatefulWidget {
     this.keyboardType,
     this.obscureText = false,
     this.suffixIcon,
-    this.validator,
+    this.focusNode,
+    this.onChanged,
   });
 
   @override
-  State<_GlassTextField> createState() => _GlassTextFieldState();
-}
-
-class _GlassTextFieldState extends State<_GlassTextField> {
-  bool _isFocused = false;
-
-  @override
   Widget build(BuildContext context) {
+    final viewModel = Provider.of<AuthViewModel>(context);
     return Focus(
-      onFocusChange: (hasFocus) => setState(() => _isFocused = hasFocus),
+      onFocusChange: viewModel.setFocused,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
@@ -776,12 +769,12 @@ class _GlassTextFieldState extends State<_GlassTextField> {
           color: AppTheme.glassBackground,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _isFocused
+            color: viewModel.isFocused
                 ? AppTheme.primary.withAlpha(179)
                 : AppTheme.glassBorder,
-            width: _isFocused ? 1.2 : 0.5,
+            width: viewModel.isFocused ? 1.2 : 0.5,
           ),
-          boxShadow: _isFocused
+          boxShadow: viewModel.isFocused
               ? [
                   BoxShadow(
                     color: AppTheme.primary.withAlpha(31),
@@ -792,23 +785,24 @@ class _GlassTextFieldState extends State<_GlassTextField> {
               : null,
         ),
         child: TextFormField(
-          controller: widget.controller,
-          keyboardType: widget.keyboardType,
-          obscureText: widget.obscureText,
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: keyboardType,
+          obscureText: obscureText,
+          onChanged: onChanged,
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w400,
             color: AppTheme.textPrimary,
           ),
-          validator: widget.validator,
           decoration: InputDecoration(
-            hintText: widget.hint,
+            hintText: hint,
             hintStyle: GoogleFonts.inter(
               fontSize: 14,
               color: AppTheme.textMuted,
             ),
-            prefixIcon: Icon(widget.icon, size: 18, color: AppTheme.textMuted),
-            suffixIcon: widget.suffixIcon,
+            prefixIcon: Icon(icon, size: 18, color: AppTheme.textMuted),
+            suffixIcon: suffixIcon,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
@@ -818,7 +812,6 @@ class _GlassTextFieldState extends State<_GlassTextField> {
               horizontal: 16,
               vertical: 14,
             ),
-            errorStyle: GoogleFonts.inter(fontSize: 11, color: AppTheme.error),
           ),
         ),
       ),

@@ -104,21 +104,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  void _checkLockAndRates() async {
+  Future<void> _checkLockAndRates() async {
     await widget.currencyProvider.refreshIfStale();
     final isAuth = await _security.onAppResume();
-    final autoLock = await _security.autoLockEnabled;
+    final bool autoLockEnabled = await _security.autoLockEnabled;
     
     // Add a slight delay before showing the lock screen to prevent UI freeze on app resume
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        if (!isAuth && autoLock) {
-          setState(() => _isLocked = true);
-        } else {
-          setState(() => _isLocked = false);
-        }
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (mounted) {
+      if (!isAuth && autoLockEnabled) {
+        setState(() => _isLocked = true);
+      } else {
+        setState(() => _isLocked = false);
       }
-    });
+    }
   }
 
   void _unlock() {
@@ -170,12 +169,11 @@ class _PrivacyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.background,
-      child: PinEntryScreen(
-        title: 'App Locked',
-        onSuccess: onUnlock,
-      ),
-    );
+return Material(
+  color: AppTheme.background,
+  child: PinEntryScreen(
+    title: 'App Locked',
+  ),
+);
   }
 }

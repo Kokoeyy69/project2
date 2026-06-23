@@ -1,4 +1,4 @@
-import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
+import '../models/transaction_model.dart';
 import 'transactions_repository.dart';
 
 /// Mock repository for testing pagination and load-more scenarios.
@@ -28,7 +28,7 @@ class MockTransactionsRepository implements TransactionsRepository {
   }
 
   @override
-  Stream<TransactionModel> watchTopTransaction() {
+  Stream<TransactionModel> watchTopTransaction(String uid) {
     return Stream.empty();
   }
 

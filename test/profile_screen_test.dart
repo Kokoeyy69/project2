@@ -5,21 +5,22 @@ import 'package:neopay_ai/viewmodels/profile_viewmodel_base.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
+import 'package:neopay_ai/core/di/locator.dart';
 
 class FakeProfileViewModel extends ProfileViewModelBase {
-  bool _isLoadingProfile = false;
+  final bool _isLoadingProfile = false;
   bool _isUploadingPhoto = false;
   double _uploadProgress = 0.0;
   String? _name;
   String? _email;
   String? _photoUrl;
   bool _biometricEnabled = false;
-  bool _twoFactorEnabled = false;
-  bool _transactionAlerts = true;
-  bool _autoConvert = false;
-  bool _showAllCurrencies = false;
-  String _defaultCurrency = 'IDR';
-  Map<String, dynamic> _settings = {};
+  final bool _twoFactorEnabled = false;
+  final bool _transactionAlerts = true;
+  final bool _autoConvert = false;
+  final bool _showAllCurrencies = false;
+  final String _defaultCurrency = 'IDR';
+  final Map<String, dynamic> _settings = {};
 
   FakeProfileViewModel({
     String? name,
@@ -33,6 +34,7 @@ class FakeProfileViewModel extends ProfileViewModelBase {
     _photoUrl = photoUrl;
     _isUploadingPhoto = isUploadingPhoto;
     _uploadProgress = uploadProgress;
+    notifyListeners();
   }
 
   @override
@@ -148,6 +150,11 @@ class FakeProfileViewModel extends ProfileViewModelBase {
 }
 
 void main() {
+  setUpAll(() {
+    locator.allowReassignment = true;
+    setupLocator();
+  });
+
   testWidgets('ProfileScreen shows name and email from viewmodel', (
     tester,
   ) async {

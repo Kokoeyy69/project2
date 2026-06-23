@@ -1,268 +1,449 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
-import 'package:neopay_ai/services/ai_service.dart';
-import 'package:neopay_ai/theme/app_theme.dart';
-import 'package:neopay_ai/services/hive_cache_service.dart';
+import 'package:provider/provider.dart';
+import 'dart:ui';
+import 'dart:math';
+import 'package:neopay_ai/core/di/locator.dart';
+import 'package:neopay_ai/core/services/analytics_service.dart';
+import '../../core/providers/ai_provider.dart';
+import '../../core/services/gemini_ai_service.dart';
+import '../../routes/app_routes.dart';
 
-class AiChatScreen extends StatefulWidget {
-  const AiChatScreen({super.key});
-
-  @override
-  State<AiChatScreen> createState() => _AiChatScreenState();
-}
-
-class _AiChatScreenState extends State<AiChatScreen> {
-  final AiService _ai = AiService();
-  final TextEditingController _ctl = TextEditingController();
-  final List<Map<String, String>> _messages = [];
-  bool _isSending = false;
+class AiChatScreen extends StatelessWidget {
+  const AiChatScreen({Key? key}) : super(key: key);
 
   @override
-  void initState() {
-    super.initState();
+  Widget build(BuildContext context) {
+    final aiProvider = Provider.of<AIProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('AI Assistant'),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _buildMessageList(aiProvider)),
+          if (aiProvider.usageCount >= 5) _buildPremiumUpgradeCard(context),
+          if (aiProvider.isLoading) const LinearProgressIndicator(),
+          _buildInputArea(context, aiProvider),
+        ],
+      ),
+    );
   }
 
-  Future<void> _send() async {
-    final text = _ctl.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _messages.add({'role': 'user', 'text': text});
-      _ctl.clear();
-      _isSending = true;
-    });
+  Widget _buildPremiumUpgradeCard(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [Colors.purple.shade700, Colors.deepPurple.shade900],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.shade200.withOpacity(0.4),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.workspace_premium, color: Colors.white, size: 40),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Unlock Premium AI!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Get unlimited AI interactions and exclusive features.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              locator<AnalyticsService>().logBusinessEvent(
+                AnalyticsService.EVENT_PREMIUM_UPGRADE_CLICK,
+                {'source': 'ai_chat_screen_card'},
+              );
+              debugPrint('Premium Upgrade Clicked!');
+              // TODO: Navigate to premium upgrade screen
+            },
+            style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.deepPurple.shade900, backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Upgrade Now',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    try {
-      // 1. READ DATA DIRECTLY FROM LOCAL CACHE (BYPASSING PROVIDER)
-      // We use ?? 0.0 as a fallback in case the cache is empty
-      final double realBalance = (HiveCacheService.getCachedBalance()) ?? 0.0;
+  Widget _buildMessageList(AIProvider provider) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.messages.length,
+      itemBuilder: (context, index) {
+        final message = provider.messages[index];
+        bool isBurnerResponse =
+            !message.isUser && message.content.contains("Burner Card");
 
-      // 2. CREATE REAL CONTEXT
-      String realContext = "Saldo utama User saat ini adalah: Rp $realBalance.";
+        return Column(
+          children: [
+            StealthChatBubble(
+              message: message.content,
+              isUser: message.isUser,
+              status: message.status,
+            ),
+            if (isBurnerResponse) const BurnerCardWidget(),
+            if (message.status == MessageStatus.escrowPending) const EscrowStatusBadge(),
+          ],
+        );
+      },
+    );
+  }
 
-      // 3. CALL AI SERVICE WITH REAL CONTEXT
-      final aiResponse = await _ai.sendAgentMessage(
-        text,
-        financialContext: realContext,
-      );
+  Widget _buildInputArea(BuildContext context, AIProvider provider) {
+    final TextEditingController controller = TextEditingController();
 
-      String replyText = aiResponse['reply'] ?? "Tidak ada respon";
-      String action = aiResponse['action'] ?? "none";
+    return Container(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          // Show transfer confirmation if pending
+          if (provider.pendingTransfer != null)
+            _buildTransferConfirmation(context, provider),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    hintText: 'Type a message...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: () {
+                  provider.sendMessage(controller.text);
+                  controller.clear();
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-      // Add reply text to chat bubble UI
-      setState(() {
-        _messages.add({'role': 'assistant', 'text': replyText});
-      });
+  Widget _buildTransferConfirmation(BuildContext context, AIProvider provider) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border.all(color: Colors.blue.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            provider.getTransferSummary() ?? 'Transfer confirmation',
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  provider.cancelTransfer();
+                },
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () => _handleConfirmTransfer(context, provider),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-      // 3. DOUBLE VALIDATION SECURITY DIALOG
-      if (action == 'transfer') {
-        final details = aiResponse['transfer_details'];
-        final amount = details['amount'] ?? 0;
-        final recipient = details['recipient'] ?? 'Tidak diketahui';
-
-        if (amount > 0) {
-          _showTransferConfirmationDialog(recipient, amount);
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _messages.add({'role': 'assistant', 'text': 'Error: ${e.toString()}'});
-      });
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+  void _handleConfirmTransfer(BuildContext context, AIProvider provider) async {
+    final status = await provider.confirmTransfer();
+    if (status == TransferStatus.requiresVerification) {
+      _showVerificationDialog(context);
     }
   }
 
-  void _showTransferConfirmationDialog(String recipient, int amount) {
-    // Setup currency formatter for proper Rupiah display
-    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-    final formattedAmount = currencyFormatter.format(amount);
-    
-    bool isProcessing = false;
-    
+  void _showVerificationDialog(BuildContext context) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('🔒 Keamanan NeoPay'),
-            content: Text('AI mendeteksi perintah transfer.\n\nPenerima: $recipient\nNominal: $formattedAmount\n\nLanjutkan transaksi ini?'),
-            actions: [
-              TextButton(
-                onPressed: isProcessing ? null : () => Navigator.pop(dialogContext),
-                child: const Text('Batal'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                onPressed: isProcessing
-                    ? null
-                    : () async {
-                        setDialogState(() => isProcessing = true);
-
-                        final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-                        final formattedAmount = currencyFormatter.format(amount);
-                        final double originalBalance = (HiveCacheService.getCachedBalance()) ?? 0.0;
-
-                        try {
-                          // 1. SEARCH RECIPIENT IN FIRESTORE
-                          // We search for a user whose 'name' matches the recipient detected by AI
-                          final recipientQuery = await FirebaseFirestore.instance
-                              .collection('users')
-                              .where('name', isEqualTo: recipient)
-                              .limit(1)
-                              .get();
-
-                          if (recipientQuery.docs.isEmpty) {
-                            throw 'User "$recipient" tidak ditemukan di database NeoPay.';
-                          }
-
-                          final recipientDoc = recipientQuery.docs.first;
-                          final String recipientUid = recipientDoc.id;
-                          final double recipientCurrentBalance = (recipientDoc.data()['balance'] ?? 0.0).toDouble();
-
-                          // 2. SENDER VALIDATION
-                          if (originalBalance < amount) {
-                            throw 'Saldo Anda tidak mencukupi untuk transfer ini.';
-                          }
-
-                          // 3. ATOMIC TRANSACTION (The "Golden" Rule of Fintech)
-                          final User? currentUser = FirebaseAuth.instance.currentUser;
-                          if (currentUser != null) {
-                            final String senderUid = currentUser.uid;
-                            final WriteBatch batch = FirebaseFirestore.instance.batch();
-
-                            // A. Update Sender Balance (Local & Firestore)
-                            final double senderNewBalance = originalBalance - amount;
-                            await HiveCacheService.setCachedBalance(senderNewBalance);
-                            batch.update(FirebaseFirestore.instance.collection('users').doc(senderUid), {'balance': senderNewBalance});
-
-                            // B. Update Recipient Balance (Firestore Only)
-                            final double recipientNewBalance = recipientCurrentBalance + amount;
-                            batch.update(FirebaseFirestore.instance.collection('users').doc(recipientUid), {'balance': recipientNewBalance});
-
-                            // C. Record Transaction Receipt
-                            final DocumentReference trxRef = FirebaseFirestore.instance.collection('transactions').doc();
-                            batch.set(trxRef, {
-                              'senderUid': senderUid,
-                              'recipientUid': recipientUid,
-                              'recipientName': recipient,
-                              'amount': amount,
-                              'timestamp': FieldValue.serverTimestamp(),
-                              'type': 'p2p_transfer',
-                              'status': 'success'
-                            });
-
-                            await batch.commit();
-                          }
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('✅ Sukses! $formattedAmount terkirim ke $recipient'), backgroundColor: Colors.green),
-                          );
-                          if (context.mounted) Navigator.pop(dialogContext);
-
-                        } catch (e) {
-                          // ROLLBACK local cache if anything fails
-                          await HiveCacheService.setCachedBalance(originalBalance);
-                          setDialogState(() => isProcessing = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('❌ Transfer Gagal: $e'), backgroundColor: Colors.red),
-                          );
-                        }
-                      },
-                child: isProcessing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
-                      )
-                    : const Text('Lanjut Transfer', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          );
-        },
-      ),
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Security Verification'),
+          content: const Text(
+            'Transaksi ini memerlukan verifikasi tambahan untuk keamanan dana Anda.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).pushNamed(AppRoutes.pinEntryScreen);
+              },
+              child: const Text('Verify Now'),
+            ),
+          ],
+        );
+      },
     );
   }
+}
 
-  Widget _buildBubble(Map<String, String> msg) {
-    final isUser = msg['role'] == 'user';
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        decoration: BoxDecoration(
-          color: isUser ? AppTheme.primary : AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          msg['text'] ?? '',
-          style: GoogleFonts.inter(
-            color: isUser ? Colors.white : AppTheme.textPrimary,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
+class StealthChatBubble extends StatefulWidget {
+  final String message;
+  final bool isUser;
+  final MessageStatus? status;
+
+  const StealthChatBubble({Key? key, required this.message, required this.isUser, this.status})
+      : super(key: key);
+
+  @override
+  _StealthChatBubbleState createState() => _StealthChatBubbleState();
+}
+
+class _StealthChatBubbleState extends State<StealthChatBubble> {
+  bool isObscured = true;
+
+  bool get isSensitive {
+    if (widget.isUser) return false;
+    final keywords = ["Saldo", "Total Kekayaan", "Mutasi", "Rp"];
+    return keywords.any((k) => widget.message.contains(k));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Assistant'),
-        backgroundColor: AppTheme.background,
-        foregroundColor: AppTheme.textPrimary,
-        elevation: 0,
+    Widget textContent = Text(
+      widget.message,
+      style: const TextStyle(color: Colors.black87),
+    );
+
+    Widget bubbleContent = textContent;
+
+    if (isSensitive) {
+      bubbleContent = GestureDetector(
+        onPanDown: (_) => setState(() => isObscured = false),
+        onPanCancel: () => setState(() => isObscured = true),
+        onPanEnd: (_) => setState(() => isObscured = true),
+        child: ImageFiltered(
+          imageFilter: isObscured
+              ? ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0)
+              : ImageFilter.blur(sigmaX: 0.0, sigmaY: 0.0),
+          child: textContent,
+        ),
+      );
+    }
+
+    return Align(
+      alignment: widget.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: widget.isUser ? Colors.blue[100] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: bubbleContent,
       ),
-      body: Column(
+    );
+  }
+}
+
+class EscrowStatusBadge extends StatefulWidget {
+  const EscrowStatusBadge({Key? key}) : super(key: key);
+
+  @override
+  State<EscrowStatusBadge> createState() => _EscrowStatusBadgeState();
+}
+
+class _EscrowStatusBadgeState extends State<EscrowStatusBadge> {
+  double _opacity = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) setState(() => _opacity = 1.0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 500),
+      opacity: _opacity,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.amber.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shield_outlined, color: Colors.amber.shade800, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              "Secured in Escrow",
+              style: TextStyle(
+                color: Colors.amber.shade800,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BurnerCardWidget extends StatelessWidget {
+  const BurnerCardWidget({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final random = Random();
+    String cardNumber = "";
+    for (int i = 0; i < 4; i++) {
+      cardNumber +=
+          (1000 + random.nextInt(9000)).toString() + (i == 3 ? "" : " ");
+    }
+    String validThru =
+        "${(random.nextInt(12) + 1).toString().padLeft(2, '0')}/${25 + random.nextInt(5)}";
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1a2a6c), Color(0xFFb21f1f), Color(0xFFfdbb2d)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 12, bottom: 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, i) => _buildBubble(_messages[i]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "NeoPay Virtual",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18),
+              ),
+              Icon(Icons.contactless, color: Colors.white.withOpacity(0.8)),
+            ],
+          ),
+          const SizedBox(height: 30),
+          Text(
+            cardNumber,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              letterSpacing: 2,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
             ),
           ),
-          if (_isSending)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(
-                'AI is typing...',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-            ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _ctl,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask the assistant...',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isSending ? null : _send,
-                    child: const Icon(Icons.send_rounded),
-                  ),
+                  Text("VALID THRU",
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                  Text(validThru,
+                      style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
-            ),
+              const Spacer(),
+              Container(
+                width: 45,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 30,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

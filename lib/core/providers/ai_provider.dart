@@ -1,34 +1,29 @@
-import 'package:flutter/foundation.dart';
 import 'package:neopay_ai/core/providers/currency_provider.dart';
 import 'package:neopay_ai/core/services/gemini_ai_service.dart';
 import 'package:neopay_ai/core/services/exchange_rate_model.dart';
 import 'package:neopay_ai/core/services/security_service.dart';
+import 'package:neopay_ai/services/api_service.dart';
 import 'package:neopay_ai/services/hive_cache_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../config/env.dart';
+import '../di/locator.dart';
+
+/// Transfer status untuk signaling ke UI
+enum TransferStatus {
+  success,
+  failed,
+  requiresVerification,
+  cancelled,
+}
 
 /// Provider for AI chat functionality with transfer intent detection
-/// 
-/// This provider manages:
-/// - Chat history and message state
-/// - AI service initialization and communication
-/// - Transfer intent detection and confirmation state
-/// - Integration with CurrencyProvider for conversions
-/// 
-/// Usage in widgets:
-/// ```dart
-/// final aiProvider = context.watch<AIProvider>();
-/// aiProvider.sendMessage('Transfer 500 USD to Ahmad');
-/// 
-/// // Listen for transfer intents
-/// if (aiProvider.pendingTransfer != null) {
-///   showTransferConfirmation(aiProvider.pendingTransfer!);
-/// }
-/// ```
 class AIProvider extends ChangeNotifier {
-  final GeminiAiService _aiService = GeminiAiService.instance;
+  final GeminiAiService _aiService = locator<GeminiAiService>();
   CurrencyProvider? _currencyProvider;
 
   final List<ChatMessage> _messages = [];
+  int _usageCount = 0;
   bool _isLoading = false;
   bool _isInitialized = false;
   TransferIntent? _pendingTransfer;
@@ -36,20 +31,19 @@ class AIProvider extends ChangeNotifier {
 
   // Getters
   List<ChatMessage> get messages => List.unmodifiable(_messages);
+  int get usageCount => _usageCount;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   TransferIntent? get pendingTransfer => _pendingTransfer;
   String? get error => _error;
 
-  /// Initialize the AI provider
-  /// Call this on app startup or when entering AI chat
+  /// Initialize AI provider
   Future<void> init({CurrencyProvider? currencyProvider}) async {
     if (_isInitialized) return;
 
     _currencyProvider = currencyProvider;
 
     try {
-      // Get Gemini API key from Hive cache, fallback to env.json
       final cachedKey = HiveCacheService.get('gemini_api_key') as String?;
       final apiKey = cachedKey?.isNotEmpty == true
           ? cachedKey
@@ -63,8 +57,7 @@ class AIProvider extends ChangeNotifier {
     }
   }
 
-  /// Send a message to the AI and get a response
-  /// If the AI detects a transfer intent, it will be stored in pendingTransfer
+  /// Send message to AI
   Future<void> sendMessage(String message) async {
     if (!_isInitialized) {
       _error = 'AI service not initialized';
@@ -72,10 +65,9 @@ class AIProvider extends ChangeNotifier {
       return;
     }
 
-    // Add user message
     _addMessage(ChatMessage.user(message));
     _isLoading = true;
-    _pendingTransfer = null; // Clear previous pending transfer
+    _pendingTransfer = null;
     notifyListeners();
 
     try {
@@ -85,8 +77,8 @@ class AIProvider extends ChangeNotifier {
       );
 
       _addMessage(response);
+      _usageCount++;
 
-      // If there's a transfer intent, store it
       if (response.transferIntent != null) {
         _pendingTransfer = response.transferIntent;
       }
@@ -99,42 +91,69 @@ class AIProvider extends ChangeNotifier {
     }
   }
 
-  /// Confirm and execute the pending transfer with security check
-  /// Returns true if successful
-  Future<bool> confirmTransfer() async {
-    if (_pendingTransfer == null) return false;
+  /// Confirm transfer - returns status, NOT dialog
+  /// UI harus handle status ini dan show dialog jika diperlukan
+  Future<TransferStatus> confirmTransfer() async {
+    if (_pendingTransfer == null) return TransferStatus.cancelled;
 
-    // Security: require authentication before executing transfer
-    final security = SecurityService.instance;
+    final security = locator<SecurityService>();
     if (!security.isAuthenticated) {
-      _addMessage(ChatMessage.ai(
-        '🔒 Untuk keamanan, silakan autentikasi terlebih dahulu sebelum melanjutkan transfer.',
-      ));
-      notifyListeners();
-      return false;
+      // Return status, jangan show dialog di sini
+      return TransferStatus.requiresVerification;
     }
 
-    // Add confirmation message
-    _addMessage(ChatMessage.ai(
-      '✅ Transfer sedang diproses...\n\n'
-      'Mengirim ${_pendingTransfer!.amount} ${_pendingTransfer!.currency} ke ${_pendingTransfer!.recipientName}',
-    ));
+    final intent = _pendingTransfer!;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return TransferStatus.failed;
 
-    // Clear pending transfer
-    _pendingTransfer = null;
-    notifyListeners();
+    try {
+      final api = locator<ApiService>();
+      final res = await api.processTransfer(
+        TransferRequest(
+          senderUid: currentUser.uid,
+          recipientUid: '',
+          recipientName: intent.recipientName ?? 'Unknown',
+          amount: intent.amount,
+          senderName: currentUser.displayName ?? 'User',
+        ),
+      );
 
-    return true;
+      if (res.success) {
+        _addMessage(
+          ChatMessage.ai(
+            '✅ Sukses! Rp ${intent.amount} terkirim ke ${intent.recipientName}. '
+            'Karena ini transaksi berisiko tinggi, dana Anda sementara diamankan di Escrow Vault selama 1 jam.',
+          ),
+        );
+        _pendingTransfer = null;
+        notifyListeners();
+        return TransferStatus.success;
+      } else {
+        _addMessage(
+          ChatMessage.ai('❌ Transfer gagal: ${res.message}'),
+        );
+        _pendingTransfer = null;
+        notifyListeners();
+        return TransferStatus.failed;
+      }
+    } catch (e) {
+      _addMessage(ChatMessage.ai('❌ Error: ${e.toString()}'));
+      _pendingTransfer = null;
+      notifyListeners();
+      return TransferStatus.failed;
+    }
   }
 
-  /// Cancel the pending transfer
+  /// Cancel transfer
   void cancelTransfer() {
     if (_pendingTransfer == null) return;
 
-    _addMessage(ChatMessage.ai(
-      '❌ Transfer dibatalkan.\n\n'
-      'Ada yang lain yang bisa gua bantu?',
-    ));
+    _addMessage(
+      ChatMessage.ai(
+        '❌ Transfer dibatalkan.\n\n'
+        'Ada yang lain yang bisa gua bantu?',
+      ),
+    );
 
     _pendingTransfer = null;
     notifyListeners();
@@ -149,12 +168,10 @@ class AIProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Add a message to the chat history
   void _addMessage(ChatMessage message) {
     _messages.add(message);
   }
 
-  /// Get a formatted summary of the pending transfer for display
   String? getTransferSummary() {
     if (_pendingTransfer == null) return null;
 
@@ -162,20 +179,21 @@ class AIProvider extends ChangeNotifier {
     final symbol = SupportedCurrencies.getSymbol(intent.currency);
 
     if (intent.needsConversion) {
-      final targetSymbol = SupportedCurrencies.getSymbol(intent.convertedCurrency!);
+      final targetSymbol = SupportedCurrencies.getSymbol(
+        intent.convertedCurrency!,
+      );
       return 'Transfer Summary:\n'
-          '• Amount: ${symbol}${intent.amount.toStringAsFixed(0)} ${intent.currency}\n'
-          '• Converted: ${targetSymbol}${intent.convertedAmount!.toStringAsFixed(0)} ${intent.convertedCurrency}\n'
+          '• Amount: $symbol${intent.amount.toStringAsFixed(0)} ${intent.currency}\n'
+          '• Converted: $targetSymbol${intent.convertedAmount!.toStringAsFixed(0)} ${intent.convertedCurrency}\n'
           '• Rate: 1 ${intent.currency} = ${intent.exchangeRate!.toStringAsFixed(2)} ${intent.convertedCurrency}\n'
           '• Recipient: ${intent.recipientName}';
     }
 
     return 'Transfer Summary:\n'
-        '• Amount: ${symbol}${intent.amount.toStringAsFixed(0)} ${intent.currency}\n'
+        '• Amount: $symbol${intent.amount.toStringAsFixed(0)} ${intent.currency}\n'
         '• Recipient: ${intent.recipientName}';
   }
 
-  /// Check if AI service is ready
   bool get isReady => _aiService.isReady;
 
   @override

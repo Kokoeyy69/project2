@@ -1,4 +1,4 @@
-import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
+import '../models/transaction_model.dart';
 
 /// Result of a single fetch operation.
 class TransactionsFetchResult {
@@ -30,7 +30,7 @@ abstract class TransactionsRepository {
   /// Subscribe to realtime updates of the most recent transaction.
   /// Returns a stream that emits the latest transaction when it changes.
   /// Returns an empty stream if not logged in or if errors occur.
-  Stream<TransactionModel> watchTopTransaction();
+  Stream<TransactionModel?> watchTopTransaction(String uid);
 
   /// Load cached transactions from disk.
   /// Returns list of cached items, or empty if no cache or cache expired.

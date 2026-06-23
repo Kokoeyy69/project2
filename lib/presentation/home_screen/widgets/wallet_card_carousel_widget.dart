@@ -67,11 +67,11 @@ class _WalletCardCarouselWidgetState extends State<WalletCardCarouselWidget> {
     if (widget.balances == null || widget.balances!.isEmpty) return;
 
     final double idrBalance = (widget.balances![0] as num).toDouble();
-    final double usdBalance = (widget.balances!.length > 1) 
-        ? (widget.balances![1] as num).toDouble() 
+    final double usdBalance = (widget.balances!.length > 1)
+        ? (widget.balances![1] as num).toDouble()
         : idrBalance / 16200;
-    final double cnyBalance = (widget.balances!.length > 2) 
-        ? (widget.balances![2] as num).toDouble() 
+    final double cnyBalance = (widget.balances!.length > 2)
+        ? (widget.balances![2] as num).toDouble()
         : idrBalance / 2200;
 
     final idrFormat = NumberFormat.currency(

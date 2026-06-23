@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:neopay_ai/core/services/security_service.dart';
+import 'package:neopay_ai/core/services/app_lock_service.dart';
+import 'package:neopay_ai/core/di/locator.dart';
+import 'package:neopay_ai/core/services/notification_service.dart';
 import 'package:neopay_ai/services/analytics_service.dart';
 import 'package:neopay_ai/utils/permission_helper.dart';
 import '../../theme/app_theme.dart';
@@ -78,36 +81,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       extendBody: true,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _buildAppBar(),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                child: Column(
-                  children: [
-                    _buildUserAvatar(),
-                    const SizedBox(height: 24),
-                    _buildSecuritySection(),
-                    const SizedBox(height: 16),
-                    _buildCurrencyPreferencesSection(),
-                    const SizedBox(height: 16),
-                    _buildAccountSection(),
-                    const SizedBox(height: 16),
-                    _buildLogoutButton(),
-                  ],
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _buildAppBar(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    child: Column(
+                      children: [
+                        _buildUserAvatar(),
+                        const SizedBox(height: 24),
+                        _buildSecuritySection(),
+                        const SizedBox(height: 16),
+                        _buildCurrencyPreferencesSection(),
+                        const SizedBox(height: 16),
+                        _buildAccountSection(),
+                        const SizedBox(height: 16),
+                        _buildLogoutButton(),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (_vm.isUploadingPhoto) _buildUploadOverlay(),
+        ],
       ),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
+      ),
+    );
+  }
+
+  Widget _buildUploadOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black54,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Uploading Profile Photo',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: _vm.uploadProgress,
+                        strokeWidth: 6,
+                        backgroundColor: AppTheme.primary.withAlpha(40),
+                      ),
+                      Text(
+                        '${(_vm.uploadProgress * 100).toInt()}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () => _vm.cancelUpload(),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -180,157 +241,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Stack(
                 alignment: Alignment.bottomRight,
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primary, AppTheme.accent],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withAlpha(100),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Builder(
-                        builder: (context) {
-                          if (_vm.isLoadingProfile) {
-                            return const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            );
-                          }
-                          if (_vm.isUploadingPhoto) {
-                            // Show upload progress overlay with cancel
-                            return Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                if (_vm.photoUrl != null &&
-                                    _vm.photoUrl!.isNotEmpty)
-                                  CachedNetworkImage(
-                                    imageUrl: _vm.photoUrl!,
-                                    fit: BoxFit.cover,
-                                    placeholder: (c, s) => const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                    errorWidget: (c, s, e) => const Icon(
-                                      Icons.person_rounded,
-                                      color: Colors.white,
-                                      size: 40,
-                                    ),
-                                  )
-                                else
-                                  CachedNetworkImage(
-                                    imageUrl:
-                                        'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=160&h=160&fit=crop',
-                                    fit: BoxFit.cover,
-                                    placeholder: (c, s) => const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                    errorWidget: (c, s, e) => const Icon(
-                                      Icons.person_rounded,
-                                      color: Colors.white,
-                                      size: 40,
-                                    ),
-                                  ),
-                                Container(
-                                  color: Colors.black.withAlpha(
-                                    (0.45 * 255).round(),
-                                  ),
-                                  child: Center(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          SizedBox(
-                                            width: 48,
-                                            height: 48,
-                                            child: CircularProgressIndicator(
-                                              value: _vm.uploadProgress > 0
-                                                  ? _vm.uploadProgress
-                                                  : null,
-                                              strokeWidth: 3,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            '${(_vm.uploadProgress * 100).toStringAsFixed(0)}%',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          TextButton(
-                                            onPressed: () async {
-                                              try {
-                                                await _vm.cancelUpload();
-                                              } catch (_) {}
-                                              _showSnack('Upload cancelled');
-                                            },
-                                            child: const Text(
-                                              'Cancel',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }
-                          if (_vm.photoUrl != null &&
-                              _vm.photoUrl!.isNotEmpty) {
-                            return CachedNetworkImage(
-                              imageUrl: _vm.photoUrl!,
-                              fit: BoxFit.cover,
-                              imageBuilder: (c, imageProvider) => Image(
-                                image: imageProvider,
-                                fit: BoxFit.cover,
-                              ),
-                              placeholder: (c, s) => const Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              errorWidget: (c, s, e) => const Icon(
-                                Icons.person_rounded,
-                                color: Colors.white,
-                                size: 40,
-                              ),
-                            );
-                          }
-                          return CachedNetworkImage(
-                            imageUrl:
-                                'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=160&h=160&fit=crop',
-                            fit: BoxFit.cover,
-                            placeholder: (c, s) => const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            errorWidget: (c, s, e) => const Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 40,
-                            ),
-                          );
-                        },
-                      ),
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.grey[300],
+                    child: Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Colors.grey[600],
                     ),
                   ),
 
@@ -451,6 +368,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       iconColor: AppTheme.primary,
       children: [
         _buildToggleTile(
+          icon: Icons.lock_person_rounded,
+          iconColor: AppTheme.primary,
+          title: 'Gunakan Biometrik untuk Masuk',
+          subtitle: 'Secure app when in background',
+          value: AppLockService().isBiometricEnabled,
+          onChanged: (val) async {
+            await AppLockService().toggleBiometric(val);
+            if (mounted) setState(() {});
+          },
+        ),
+        _buildDivider(),
+        _buildToggleTile(
           icon: Icons.fingerprint_rounded,
           iconColor: AppTheme.primary,
           title: 'Biometric Login',
@@ -458,22 +387,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
           value: _vm.biometricEnabled,
           onChanged: (val) async {
             // Unconditionally save the preference - no hardware checks
-            await SecurityService.instance.setBiometricEnabled(val);
+            await locator<SecurityService>().setBiometricEnabled(val);
             if (mounted) setState(() {}); // Refresh UI to reflect change
           },
         ),
         _buildDivider(),
-        _buildToggleTile(
-          icon: Icons.lock_rounded,
-          iconColor: AppTheme.accent,
-          title: 'Two-Factor Auth',
-          subtitle: 'Extra layer of security',
-          value: _vm.twoFactorEnabled,
-          onChanged: (val) async {
-            final ok = await _vm.updateSetting('twoFactorEnabled', val);
-            if (!ok) _showSnack('Failed to update setting', true);
-          },
-        ),
+          _buildToggleTile(
+            icon: Icons.lock_rounded,
+            iconColor: AppTheme.accent,
+            title: 'Two-Factor Auth',
+            subtitle: 'Extra layer of security',
+            value: _vm.twoFactorEnabled,
+            onChanged: (val) async {
+              final context = this.context;
+              bool pinVerified = false;
+              // Step 1: Require PIN before allowing action
+              final pinResult = await Navigator.pushNamed(context, AppRoutes.pinEntryScreen, arguments: {
+                'title': val ? 'Verifikasi PIN sebelum Setup 2FA' : 'Masukkan PIN untuk Matikan 2FA',
+                'isSetup': false,
+              });
+              if (pinResult == true) {
+                pinVerified = true;
+              }
+              if (!pinVerified) return;
+              if (val) {
+                // Enabling: route to 2FA setup screen
+                final userEmail = _vm.email ?? '';
+                final setupResult = await Navigator.pushNamed(context, '/twoFactorSetupScreen', arguments: userEmail);
+                if (setupResult == true) {
+                  await _vm.updateSetting('twoFactorEnabled', true);
+                  if (mounted) setState(() {});
+                  _showSnack('2FA diaktifkan', false);
+                }
+              } else {
+                // Disabling: require TOTP code or PIN (if secret missing)
+                final twoFactorSecret = await SecurityService.instance.get2FASecret();
+                if (twoFactorSecret != null) {
+                  // Show dialog for 6-digit TOTP input
+                  final TextEditingController codeCtl = TextEditingController();
+                  final disabled = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) {
+                      return AlertDialog(
+                        title: const Text('Verifikasi Kode TOTP'),
+                        content: TextField(
+                          controller: codeCtl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Kode 6 digit dari Authenticator'),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () { Navigator.pop(ctx, false); },
+                            child: const Text('Batal'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final code = codeCtl.text;
+                              final valid = await SecurityService.instance.verifyTOTP(twoFactorSecret, code);
+                              if (context.mounted) Navigator.pop(ctx, valid);
+                            },
+                            child: const Text('Verifikasi & Nonaktifkan'),
+                          ),
+                        ],
+                      );
+                    }
+                  );
+                  if (disabled == true) {
+                    await SecurityService.instance.delete2FASecret();
+                    await SecurityService.instance.setTwoFactorEnabled(false);
+                    await _vm.updateSetting('twoFactorEnabled', false);
+                    if (mounted) setState(() {});
+                    _showSnack('2FA dimatikan', false);
+                  } else {
+                    _showSnack('Kode salah atau dibatalkan', true);
+                  }
+                } else {
+                  await SecurityService.instance.setTwoFactorEnabled(false);
+                  await _vm.updateSetting('twoFactorEnabled', false);
+                  if (mounted) setState(() {});
+                  _showSnack('2FA dimatikan', false);
+                }
+              }
+            },
+          ),
         _buildDivider(),
         _buildToggleTile(
           icon: Icons.notifications_active_rounded,
@@ -482,6 +479,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           subtitle: 'Get notified on every transaction',
           value: _vm.transactionAlerts,
           onChanged: (val) async {
+            if (val) {
+              final granted =
+                  await NotificationService().requestNotificationPermission();
+              if (!granted) {
+                _showSnack('Notification permission denied', true);
+                return;
+              }
+            }
             final ok = await _vm.updateSetting('transactionAlerts', val);
             if (!ok) _showSnack('Failed to update setting', true);
           },
@@ -500,7 +505,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           iconColor: AppTheme.primary,
           title: 'Ganti PIN',
           subtitle: 'Change your transaction PIN',
-          onTap: _changePin,
+          onTap: () => Navigator.pushNamed(context, AppRoutes.changePinScreen),
         ),
       ],
     );
@@ -822,8 +827,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildLogoutButton() {
     return GestureDetector(
       onTap: () async {
+        // 1. Viewmodel cleanup (cancels active streams before auth token dies)
         await _vm.signOut();
+
+        // 2. Sign out from Firebase Auth
+        await FirebaseAuth.instance.signOut();
+
+        // 3. Also call viewmodel's signOut for any additional cleanup
+        await _vm.signOut();
+
         if (!mounted) return;
+
+        // 4. Clear routing history and navigate to login
         Navigator.pushNamedAndRemoveUntil(
           context,
           AppRoutes.signUpLoginScreen,
@@ -901,8 +916,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Crop via viewmodel helper
       try {
         cropped = await _vm.cropImage(picked.path);
-        if (cropped != null && cropped.path.isNotEmpty)
+        if (cropped != null && cropped.path.isNotEmpty) {
           imagePath = cropped.path;
+        }
       } catch (_) {
         imagePath = picked.path;
       }
@@ -938,8 +954,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } finally {
       // cleanup
       try {
-        if (compressedFile != null && await compressedFile.exists())
+        if (compressedFile != null && await compressedFile.exists()) {
           await compressedFile.delete();
+        }
       } catch (_) {}
       try {
         if (cropped != null && picked != null && cropped.path != picked.path) {
@@ -1173,111 +1190,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _changePin() async {
-    if (_vm.user == null) {
-      _showSnack('Not signed in', true);
-      return;
-    }
-
-    final currentPinCtl = TextEditingController();
-    final newPinCtl = TextEditingController();
-    final confirmPinCtl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Ganti PIN'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: currentPinCtl,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Current PIN',
-                    hintText: '6 digits',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.length != 6) {
-                      return 'Enter 6-digit PIN';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: newPinCtl,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'New PIN',
-                    hintText: '6 digits',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.length != 6) {
-                      return 'Enter 6-digit PIN';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: confirmPinCtl,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New PIN',
-                    hintText: '6 digits',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.length != 6) {
-                      return 'Enter 6-digit PIN';
-                    }
-                    if (v != newPinCtl.text) {
-                      return 'PINs do not match';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(context);
-                try {
-                  final securityService = SecurityService.instance;
-                  final success = await securityService.changeTransactionPin(
-                    currentPinCtl.text,
-                    newPinCtl.text,
-                  );
-                  if (success) {
-                    _showSnack('PIN updated successfully');
-                  } else {
-                    _showSnack('Current PIN is incorrect', true);
-                  }
-                } catch (e) {
-                  _showSnack('Failed to change PIN: $e', true);
-                }
-              },
-              child: const Text('Change'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   void _showSnack(String message, [bool error = false]) {
     if (!mounted) return;

@@ -7,6 +7,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>NeoPay requires access to your location to find nearby agents.</string>
+
 	<!-- Permissions for camera & photo library (profile photo capture/pick) -->
 	<key>NSCameraUsageDescription</key>
 	<string>App needs camera access to let you take profile photos.</string>
@@ -15,7 +18,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>App may save edited profile photos to your photo library.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID for quick and secure sign in.</string>
+	<string>NeoPay membutuhkan Face ID untuk mengamankan transaksi.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Project2</string>
 	<key>CFBundleExecutable</key>

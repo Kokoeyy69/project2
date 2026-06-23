@@ -3,10 +3,11 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:neopay_ai/services/hive_cache_service.dart';
+import 'package:rxdart/rxdart.dart';
 
-import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
+import '../models/transaction_model.dart';
 import 'transactions_repository.dart';
 
 /// Firestore implementation of [TransactionsRepository].
@@ -45,80 +46,176 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
     }
 
     try {
-      Query query = _firestore
+      final outgoingQuery = _firestore
           .collection('transactions')
-          .where(Filter.or(
-            Filter('sender_uid', isEqualTo: user.uid),
-            Filter('recipient_uid', isEqualTo: user.uid),
-          ))
-          .orderBy('timestamp', descending: true)
-          .limit(pageSize);
+          .where('sender_uid', isEqualTo: user.uid)
+          .orderBy('timestamp', descending: true);
 
-      if (cursor is DocumentSnapshot) {
-        query = query.startAfterDocument(cursor);
-      }
+      final incomingQuery = _firestore
+          .collection('transactions')
+          .where('recipient_uid', isEqualTo: user.uid)
+          .orderBy('timestamp', descending: true);
 
-      final snap = await query.get();
-      final fetched = snap.docs;
+      // Fetch a larger buffer since we are combining two streams locally
+      final fetchLimit = cursor != null ? 100 : pageSize;
 
-      if (fetched.isEmpty) {
-        return TransactionsFetchResult(items: [], hasMore: false);
-      }
+      final results = await Future.wait([
+        outgoingQuery.limit(fetchLimit).get(),
+        incomingQuery.limit(fetchLimit).get(),
+      ]);
 
-      final models = fetched.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return _buildTransactionModel(doc.id, data);
+      final s1 = results[0];
+      final s2 = results[1];
+
+      final combinedDocs = [...s1.docs, ...s2.docs];
+      final transactions = combinedDocs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final map = Map<String, dynamic>.from(data);
+        if (!map.containsKey('id')) {
+          map['id'] = doc.id;
+        }
+        return _buildTransactionModel(doc.id, map);
       }).toList();
 
+      // Deduplicate by ID and sort by timestamp descending
+      final seenIds = <String>{};
+      final deduped = transactions.where((t) => seenIds.add(t.id)).toList();
+      deduped.sort((a, b) {
+        final tsA = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tsB = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return tsB.compareTo(tsA);
+      });
+
+      // Local cursor-based pagination
+      List<TransactionModel> pageItems;
+      if (cursor is DocumentSnapshot) {
+        final cursorId = cursor.id;
+        final cursorIndex = deduped.indexWhere((t) => t.id == cursorId);
+        if (cursorIndex != -1 && cursorIndex + 1 < deduped.length) {
+          pageItems = deduped.skip(cursorIndex + 1).take(pageSize).toList();
+        } else {
+          pageItems = [];
+        }
+      } else {
+        pageItems = deduped.take(pageSize).toList();
+      }
+
+      // Find the corresponding DocumentSnapshot to use as the next cursor
+      dynamic nextCursor;
+      if (pageItems.isNotEmpty) {
+        final lastId = pageItems.last.id;
+        try {
+          nextCursor = combinedDocs.firstWhere((doc) => doc.id == lastId);
+        } catch (_) {
+          nextCursor = null;
+        }
+      }
+
       return TransactionsFetchResult(
-        items: models,
-        hasMore: fetched.length == pageSize,
-        cursor: fetched.last,
+        items: pageItems,
+        hasMore: pageItems.length == pageSize,
+        cursor: nextCursor,
       );
     } catch (e) {
       rethrow;
     }
   }
 
-  @override
-  Stream<TransactionModel> watchTopTransaction() {
-    final user = _auth.currentUser;
-    if (user == null) {
-      debugPrint('watchTopTransaction: No user logged in, returning empty stream');
-      return Stream.empty();
+  Stream<List<TransactionModel>> watchUserTransactions(String uid) {
+    if (uid.isEmpty || uid.contains('/') || uid.length > 100) {
+      return Stream.value([]);
     }
 
-    debugPrint('watchTopTransaction: Watching for user ${user.uid}');
-    return _firestore
+    final outgoing = _firestore
         .collection('transactions')
-        .where(Filter.or(
-          Filter('sender_uid', isEqualTo: user.uid),
-          Filter('recipient_uid', isEqualTo: user.uid),
-        ))
-        .orderBy('timestamp', descending: true)
-        .limit(1)
+        .where('sender_uid', isEqualTo: uid.trim())
         .snapshots()
-        .map((snapshot) {
-          debugPrint('watchTopTransaction: Received snapshot with ${snapshot.docs.length} docs');
-          if (snapshot.docs.isEmpty) {
-            debugPrint('watchTopTransaction: No documents in snapshot');
-            return <TransactionModel>[];
+        .handleError((e) => const Stream.empty());
+    final incoming = _firestore
+        .collection('transactions')
+        .where('recipient_uid', isEqualTo: uid.trim())
+        .snapshots()
+        .handleError((e) => const Stream.empty());
+
+    return Rx.combineLatest2(outgoing, incoming, (
+      QuerySnapshot s1,
+      QuerySnapshot s2,
+    ) {
+      final combined = [...s1.docs, ...s2.docs];
+      final list = combined
+          .map((doc) => TransactionModel.fromFirestore(doc))
+          .toList();
+
+      // Deduplicate by transaction ID and sort descending safely
+      final seenIds = <String>{};
+      return list.where((t) => seenIds.add(t.id)).toList()..sort((a, b) {
+        final timeA = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeB.compareTo(timeA);
+      });
+    }).handleError((e) => Stream.value(<TransactionModel>[]));
+  }
+
+  Stream<List<TransactionModel>> watchAllUserTransactions(String uid) {
+    return watchUserTransactions(uid);
+  }
+
+  @override
+  Stream<TransactionModel?> watchTopTransaction(String uid) {
+    if (uid.isEmpty || uid.contains('/') || uid.length > 100) {
+      if (kDebugMode) {
+        print('[FirestoreTransactionsRepository] Invalid UID for watchTopTransaction: "$uid"');
+      }
+      return Stream.value(null);
+    }
+
+    final outgoing = _firestore
+        .collection('transactions')
+        .where('sender_uid', isEqualTo: uid.trim())
+        .snapshots()
+        .handleError((e) {
+          if (kDebugMode) {
+            print('[FirestoreTransactionsRepository] Error in outgoing stream: $e');
           }
-          final doc = snapshot.docs.first;
-          final data = doc.data();
-          debugPrint('watchTopTransaction: Building model for doc ${doc.id}');
-          try {
-            final model = _buildTransactionModel(doc.id, data);
-            debugPrint('watchTopTransaction: Successfully built model - merchant: ${model.merchantName}, amount: ${model.amount}');
-            return [model];
-          } catch (e, stackTrace) {
-            debugPrint('watchTopTransaction: Error building model: $e');
-            debugPrint('watchTopTransaction: Stack trace: $stackTrace');
-            debugPrint('watchTopTransaction: Document data: $data');
-            return <TransactionModel>[];
+          return const Stream.empty();
+        });
+
+    final incoming = _firestore
+        .collection('transactions')
+        .where('recipient_uid', isEqualTo: uid.trim())
+        .snapshots()
+        .handleError((e) {
+          if (kDebugMode) {
+            print('[FirestoreTransactionsRepository] Error in incoming stream: $e');
           }
-        })
-        .expand((models) => models);
+          return const Stream.empty();
+        });
+
+    return Rx.combineLatest2(outgoing, incoming, (
+      QuerySnapshot s1,
+      QuerySnapshot s2,
+    ) {
+      final combined = [...s1.docs, ...s2.docs];
+      if (combined.isEmpty) return null;
+
+      final list = combined
+          .map((doc) => TransactionModel.fromFirestore(doc))
+          .toList();
+
+      // Null-safe sorting
+      list.sort((a, b) {
+        final timeA = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeB.compareTo(timeA);
+      });
+
+      return list.first;
+    }).handleError((e) {
+      if (kDebugMode) {
+        print('[FirestoreTransactionsRepository] Error in combined stream: $e');
+      }
+      return Stream.value(null);
+    });
   }
 
   @override
@@ -156,10 +253,11 @@ class FirestoreTransactionsRepository implements TransactionsRepository {
         return [];
       }
 
-      return list
-          .map((e) => TransactionModel.fromJson(e))
-          .toList();
-    } catch (_) {
+      return list.map((e) => TransactionModel.fromJson(e)).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('[FirestoreTransactionsRepository] Error loading cache: $e');
+      }
       return [];
     }
   }

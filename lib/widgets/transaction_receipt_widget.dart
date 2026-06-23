@@ -30,180 +30,209 @@ class TransactionReceiptWidget extends StatefulWidget {
   });
 
   @override
-  State<TransactionReceiptWidget> createState() => _TransactionReceiptWidgetState();
+  State<TransactionReceiptWidget> createState() =>
+      _TransactionReceiptWidgetState();
 }
 
 class _TransactionReceiptWidgetState extends State<TransactionReceiptWidget> {
   String get _formattedAmount {
     final formatter = NumberFormat.currency(
       locale: 'id_ID',
-      symbol: widget.currency == 'USD' ? '\$' : (widget.currency == 'CNY' ? '¥ ' : 'Rp '),
+      symbol: widget.currency == 'USD'
+          ? '\$'
+          : (widget.currency == 'CNY' ? '¥ ' : 'Rp '),
       decimalDigits: 0,
     );
     return formatter.format(widget.amount);
   }
 
   String get _referenceNumber =>
-      widget.referenceNumber ?? 'NPY${widget.transactionId.substring(0, 8).toUpperCase()}';
+      widget.referenceNumber ??
+      'NPY${widget.transactionId.substring(0, 8).toUpperCase()}';
 
   @override
   Widget build(BuildContext context) {
     return Container(
-        width: 340,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(20),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with logo
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primary, AppTheme.accent],
+      width: 340,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(20),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header with logo
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primary, AppTheme.accent],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'NeoPay',
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
                     ),
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.account_balance_wallet, color: Colors.white, size: 24),
+                  Text(
+                    'Digital Receipt',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: AppTheme.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
                 ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('NeoPay',
-                        style: GoogleFonts.inter(
-                            fontSize: 20, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
-                    Text('Digital Receipt',
-                        style: GoogleFonts.inter(
-                            fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.w500)),
-                  ],
+                decoration: BoxDecoration(
+                  color: widget.status.toLowerCase() == 'success'
+                      ? AppTheme.successMuted
+                      : AppTheme.errorMuted,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
+                child: Text(
+                  widget.status.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                     color: widget.status.toLowerCase() == 'success'
-                        ? AppTheme.successMuted
-                        : AppTheme.errorMuted,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    widget.status.toUpperCase(),
-                    style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: widget.status.toLowerCase() == 'success'
-                            ? AppTheme.success
-                            : AppTheme.error),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // Divider with zigzag effect
-            Container(
-              height: 2,
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: AppTheme.separator,
-                    width: 1,
-                    strokeAlign: BorderSide.strokeAlignInside,
+                        ? AppTheme.success
+                        : AppTheme.error,
                   ),
                 ),
               ),
-            ),
+            ],
+          ),
 
-            const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-            // Amount
-            Center(
-              child: Text(
-                _formattedAmount,
-                style: GoogleFonts.inter(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.textPrimary),
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Type badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryMuted,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _getTypeLabel(),
-                style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Transaction details
-            _buildDetailRow('Reference', _referenceNumber),
-            _buildDetailRow('Date', '${widget.date} at ${widget.time}'),
-            _buildDetailRow('From', widget.senderName),
-            _buildDetailRow('To', widget.recipientName),
-
-            const SizedBox(height: 20),
-
-            // Divider with zigzag effect
-            Container(
-              height: 2,
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: AppTheme.separator,
-                    width: 1,
-                    strokeAlign: BorderSide.strokeAlignInside,
-                  ),
+          // Divider with zigzag effect
+          Container(
+            height: 2,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: AppTheme.separator,
+                  width: 1,
+                  strokeAlign: BorderSide.strokeAlignInside,
                 ),
               ),
             ),
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-            // Footer
-            Row(
-              children: [
-                const Icon(Icons.shield_outlined, color: AppTheme.success, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Secured by NeoPay',
-                    style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: AppTheme.textMuted,
-                        fontWeight: FontWeight.w500),
+          // Amount
+          Center(
+            child: Text(
+              _formattedAmount,
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Type badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryMuted,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _getTypeLabel(),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Transaction details
+          _buildDetailRow('Reference', _referenceNumber),
+          _buildDetailRow('Date', '${widget.date} at ${widget.time}'),
+          _buildDetailRow('From', widget.senderName),
+          _buildDetailRow('To', widget.recipientName),
+
+          const SizedBox(height: 20),
+
+          // Divider with zigzag effect
+          Container(
+            height: 2,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: AppTheme.separator,
+                  width: 1,
+                  strokeAlign: BorderSide.strokeAlignInside,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Footer
+          Row(
+            children: [
+              const Icon(
+                Icons.shield_outlined,
+                color: AppTheme.success,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Secured by NeoPay',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    color: AppTheme.textMuted,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
-      );
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -212,16 +241,24 @@ class _TransactionReceiptWidgetState extends State<TransactionReceiptWidget> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: GoogleFonts.inter(
-                  fontSize: 12, color: AppTheme.textMuted, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppTheme.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           Flexible(
-            child: Text(value,
-                textAlign: TextAlign.end,
-                style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -295,18 +332,24 @@ class TransactionSuccessDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text('Transaction Successful!',
-                style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary)),
+            Text(
+              'Transaction Successful!',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(notificationMessage,
-                style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppTheme.textSecondary,
-                    height: 1.5),
-                textAlign: TextAlign.center),
+            Text(
+              notificationMessage,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             // Receipt preview
             TransactionReceiptWidget(
@@ -332,9 +375,13 @@ class TransactionSuccessDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: Text('Done',
-                        style: GoogleFonts.inter(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Done',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -352,9 +399,13 @@ class TransactionSuccessDialog extends StatelessWidget {
                       );
                     },
                     icon: const Icon(Icons.share, size: 18),
-                    label: Text('Share',
-                        style: GoogleFonts.inter(
-                            fontSize: 14, fontWeight: FontWeight.w700)),
+                    label: Text(
+                      'Share',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
                       padding: const EdgeInsets.symmetric(vertical: 14),

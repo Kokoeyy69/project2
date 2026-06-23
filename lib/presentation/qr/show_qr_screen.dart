@@ -1,67 +1,40 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import './qr_view_model.dart';
 
-class ShowQRScreen extends StatefulWidget {
+class ShowQRScreen extends StatelessWidget {
   const ShowQRScreen({super.key});
 
   @override
-  State<ShowQRScreen> createState() => _ShowQRScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => QRViewModel()..loadUserData(),
+      child: const _ShowQRScreenContent(),
+    );
+  }
 }
 
-class _ShowQRScreenState extends State<ShowQRScreen> {
-  String? _userName;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-  }
-
-  Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (mounted) {
-        setState(() {
-          _userName = doc.data()?['name'] ?? 'NeoPay User';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _userName = 'NeoPay User';
-          _isLoading = false;
-        });
-      }
-    }
-  }
+class _ShowQRScreenContent extends StatelessWidget {
+  const _ShowQRScreenContent();
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final viewModel = Provider.of<QRViewModel>(context);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Text('Terima Pembayaran',
-            style: GoogleFonts.inter(
-                fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        title: Text(
+          'QR Code Saya',
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+        ),
         backgroundColor: AppTheme.background,
         elevation: 0,
         leading: IconButton(
@@ -69,14 +42,14 @@ class _ShowQRScreenState extends State<ShowQRScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _isLoading
-          ? Center(
-              child: SpinKitFadingCircle(color: AppTheme.primary, size: 40),
-            )
-          : user == null
+      body: viewModel.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : viewModel.userUid == null
               ? Center(
-                  child: Text('Silakan login terlebih dahulu',
-                      style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+                  child: Text(
+                    'Silakan login terlebih dahulu',
+                    style: GoogleFonts.inter(color: AppTheme.textSecondary),
+                  ),
                 )
               : SafeArea(
                   child: Padding(
@@ -84,103 +57,85 @@ class _ShowQRScreenState extends State<ShowQRScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Profile avatar
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: AppTheme.primaryMuted,
-                          child: Icon(Icons.person, size: 40, color: AppTheme.primary),
-                        ),
-                        const SizedBox(height: 24),
-                        // User name
-                        Text(
-                          _userName ?? 'NeoPay User',
-                          style: GoogleFonts.inter(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.textPrimary),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Scan QR ini untuk membayar',
-                          style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: AppTheme.textSecondary),
-                        ),
-                        const SizedBox(height: 32),
-                        // QR Code Card
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                        Card(
+                          elevation: 8,
+                          shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primary.withAlpha(20),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
                           ),
-                          child: Column(
-                            children: [
-                              QrImageView(
-                                data: user.uid,
-                                version: QrVersions.auto,
-                                size: 200.0,
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black87,
-                                eyeStyle: const QrEyeStyle(
-                                  eyeShape: QrEyeShape.square,
-                                  color: Colors.black87,
-                                ),
-                                dataModuleStyle: const QrDataModuleStyle(
-                                  dataModuleShape: QrDataModuleShape.square,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryMuted,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  'NeoPay ID',
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 32,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  viewModel.userName ?? 'NeoPay User',
                                   style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.primary),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tunjukkan kode ini untuk menerima dana',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                QrImageView(
+                                  data: viewModel.userUid!,
+                                  version: QrVersions.auto,
+                                  size: 250.0,
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black87,
+                                  eyeStyle: const QrEyeStyle(
+                                    eyeShape: QrEyeShape.square,
+                                    color: Colors.black87,
+                                  ),
+                                  dataModuleStyle: const QrDataModuleStyle(
+                                    dataModuleShape: QrDataModuleShape.square,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 32),
-                        // Info card
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.glassBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.glassBorder, width: 0.5),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.info_outline, color: AppTheme.primary, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Bagikan QR ini kepada pengirim untuk menerima pembayaran langsung ke saldo Anda.',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: AppTheme.textSecondary,
-                                      height: 1.5),
-                                ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Fitur Bagikan segera hadir'),
+                                behavior: SnackBarBehavior.floating,
                               ),
-                            ],
+                            );
+                          },
+                          icon: const Icon(Icons.share),
+                          label: Text(
+                            'Bagikan',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 48,
+                              vertical: 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                         ),
                       ],

@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neopay_ai/utils/permission_helper.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:neopay_ai/core/di/locator.dart';
 
 void main() {
+  setUpAll(() {
+    locator.allowReassignment = true;
+    setupLocator();
+  });
+
   testWidgets(
     'ensurePermissionsForImage returns true when permissions granted',
     (tester) async {

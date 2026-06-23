@@ -2,7 +2,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'firebase_options.dart';
 import '../core/app_export.dart';
+import '../core/di/locator.dart';
 import '../core/providers/ai_provider.dart';
 import '../core/providers/currency_provider.dart';
 import '../core/services/security_service.dart';
@@ -18,8 +20,11 @@ import '../widgets/custom_error_widget.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await HiveCacheService.init();
+  setupLocator();
 
   // Initialize Currency Service for exchange rates
   // This runs silently in background - rates are cached for 12 hours
@@ -106,7 +111,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  void _checkLockAndRates() async {
+  Future<void> _checkLockAndRates() async {
     // Auto-refresh currency rates if stale
     await widget.currencyProvider.refreshIfStale();
 
@@ -115,15 +120,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final autoLock = await _security.autoLockEnabled;
     
     // Add a slight delay before showing the lock screen to prevent UI freeze on app resume
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        if (!isAuth && autoLock) {
-          setState(() => _isLocked = true);
-        } else {
-          setState(() => _isLocked = false);
-        }
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (mounted) {
+      if (!isAuth && autoLock) {
+        setState(() => _isLocked = true);
+      } else {
+        setState(() => _isLocked = false);
       }
-    });
+    }
   }
 
   void _unlock() {
@@ -175,12 +179,11 @@ class _PrivacyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.background,
-      child: PinEntryScreen(
-        title: 'App Locked',
-        onSuccess: onUnlock,
-      ),
-    );
+return Material(
+  color: AppTheme.background,
+  child: PinEntryScreen(
+    title: 'App Locked',
+  ),
+);
   }
 }

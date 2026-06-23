@@ -29,8 +29,7 @@ class HiveCacheService {
   static double? getCachedBalance() => _box.get('cached_balance');
 
   // AI settings cache
-  static Future<void> setAiApiKey(String key) =>
-      _box.put('ai_api_key', key);
+  static Future<void> setAiApiKey(String key) => _box.put('ai_api_key', key);
 
   static String? getAiApiKey() => _box.get('ai_api_key');
 
@@ -48,8 +47,7 @@ class HiveCacheService {
   static Future<void> setCachedTransactions(String cacheKey, String jsonData) =>
       _box.put(cacheKey, jsonData);
 
-  static String? getCachedTransactions(String cacheKey) =>
-      _box.get(cacheKey);
+  static String? getCachedTransactions(String cacheKey) => _box.get(cacheKey);
 
   static Future<void> clearTransactionCache(String cacheKey) =>
       _box.delete(cacheKey);
@@ -58,8 +56,7 @@ class HiveCacheService {
   static Future<void> clearAll() => _box.clear();
 
   // Generic get/set for extensibility
-  static Future<void> set(String key, dynamic value) =>
-      _box.put(key, value);
+  static Future<void> set(String key, dynamic value) => _box.put(key, value);
 
   static dynamic get(String key) => _box.get(key);
 

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:neopay_ai/services/hive_cache_service.dart';
 
-import '../presentation/home_screen/widgets/recent_transactions_widget.dart';
+import '../models/transaction_model.dart';
 import 'transactions_repository.dart';
 
 /// Simple in-memory / Hive-backed repository for tests and
@@ -35,8 +35,9 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
     dynamic cursor,
   }) async {
     final cached = HiveCacheService.getCachedTransactions(_cacheKey);
-    if (cached == null || cached.isEmpty)
+    if (cached == null || cached.isEmpty) {
       return TransactionsFetchResult(items: [], hasMore: false);
+    }
 
     final decoded = json.decode(cached);
     final items = _fromPayload(decoded);
@@ -49,7 +50,7 @@ class InMemoryTransactionsRepository implements TransactionsRepository {
   }
 
   @override
-  Stream<TransactionModel> watchTopTransaction() {
+  Stream<TransactionModel> watchTopTransaction(String uid) {
     return Stream.empty();
   }
 

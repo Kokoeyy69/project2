@@ -1,187 +1,150 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import './security_view_model.dart';
 
-class ResetPinScreen extends StatefulWidget {
+class ResetPinScreen extends StatelessWidget {
   const ResetPinScreen({super.key});
 
   @override
-  State<ResetPinScreen> createState() => _ResetPinScreenState();
-}
-
-class _ResetPinScreenState extends State<ResetPinScreen> {
-  final _emailController = TextEditingController();
-  final _otpController = TextEditingController();
-  bool _otpSent = false;
-  bool _verified = false;
-  String? _error;
-
-  void _sendOtp() {
-    if (_emailController.text.isEmpty || !_emailController.text.contains('@')) {
-      setState(() => _error = 'Enter a valid email');
-      return;
-    }
-    setState(() {
-      _otpSent = true;
-      _error = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('OTP sent! Use 123456 for demo'), backgroundColor: AppTheme.success),
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => SecurityViewModel(),
+      child: const _ResetPinScreenContent(),
     );
   }
+}
 
-  void _verifyOtp() {
-    if (_otpController.text == '123456') {
-      setState(() {
-        _verified = true;
-        _error = null;
-      });
-    } else {
-      setState(() => _error = 'Invalid OTP. Try 123456');
-    }
+class _ResetPinScreenContent extends StatelessWidget {
+  const _ResetPinScreenContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _ResetPinScreenBody();
+  }
+}
+
+class _ResetPinScreenBody extends StatefulWidget {
+  const _ResetPinScreenBody();
+
+  @override
+  State<_ResetPinScreenBody> createState() => _ResetPinScreenBodyState();
+}
+
+class _ResetPinScreenBodyState extends State<_ResetPinScreenBody> {
+  final _emailController = TextEditingController();
+  final _otpController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _otpController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final vm = Provider.of<SecurityViewModel>(context);
+
+    void handleReset() async {
+      if (!_emailController.text.contains('@')) {
+        vm.setError('Enter a valid email');
+        return;
+      }
+
+      // Simulate OTP send
+      vm.clearPin();
+      vm.setOtpSent(true);
+    }
+
+    void handleVerifyOtp() async {
+      if (_otpController.text == '123456') {
+        Navigator.pop(context, true);
+      } else {
+        vm.setError('Invalid OTP. Try 123456');
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        title: Text(
+          'Reset PIN',
+          style: GoogleFonts.inter(color: AppTheme.textPrimary),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textSecondary),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppTheme.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Reset PIN', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Forgot your PIN?',
-              style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'We\'ll send a one-time code to your email to verify your identity.',
-              style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textMuted),
-            ),
-            const SizedBox(height: 32),
-            if (!_verified) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: TextField(
-                    controller: _emailController,
-                    enabled: !_otpSent,
-                    keyboardType: TextInputType.emailAddress,
-                    style: GoogleFonts.inter(color: AppTheme.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Email address',
-                      hintStyle: const TextStyle(color: AppTheme.textMuted),
-                      filled: true,
-                      fillColor: AppTheme.glassBackground,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    ),
+            if (!vm.otpSent) ...[
+              Text(
+                'Enter your email to receive a reset code',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(
+                  hintText: 'Email',
+                  filled: true,
+                  fillColor: AppTheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-              if (_otpSent) ...[
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: TextField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      style: GoogleFonts.inter(color: AppTheme.textPrimary),
-                      decoration: InputDecoration(
-                        hintText: 'Enter OTP',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted),
-                        filled: true,
-                        fillColor: AppTheme.glassBackground,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        counterText: '',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: GoogleFonts.inter(color: AppTheme.error, fontSize: 13)),
-              ],
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _otpSent ? _verifyOtp : _sendOtp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: Text(
-                    _otpSent ? 'Verify OTP' : 'Send OTP',
-                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                ),
+              ElevatedButton(
+                onPressed: handleReset,
+                child: const Text('Send Reset Code'),
               ),
             ] else ...[
               Text(
-                'Create a new PIN',
-                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                'Enter the 6-digit code sent to your email',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 16),
-              Navigator(
-                onGenerateRoute: (_) => MaterialPageRoute(
-                  builder: (_) => _buildPinSetup(),
+              TextField(
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: InputDecoration(
+                  hintText: 'OTP Code',
+                  filled: true,
+                  fillColor: AppTheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: handleVerifyOtp,
+                child: const Text('Verify & Reset'),
+              ),
             ],
+            if (vm.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Text(
+                  vm.errorMessage!,
+                  style: GoogleFonts.inter(color: AppTheme.error),
+                ),
+              ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPinSetup() {
-    return Center(
-      child: ElevatedButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => AlertDialog(
-              backgroundColor: AppTheme.surface,
-              title: Text('Reset Complete', style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-              content: Text('Your PIN has been reset. Please set a new PIN.', style: GoogleFonts.inter(color: AppTheme.textSecondary)),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pushReplacementNamed(context, '/pin-setup');
-                  },
-                  child: const Text('Continue', style: TextStyle(color: AppTheme.primary)),
-                ),
-              ],
-            ),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primary,
-          padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: Text('Continue to PIN Setup', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
       ),
     );
   }

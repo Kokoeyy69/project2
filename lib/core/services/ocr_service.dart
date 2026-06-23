@@ -63,7 +63,9 @@ class OcrService {
   String _extractMerchantName(RecognizedText recognizedText) {
     for (final block in recognizedText.blocks) {
       final text = block.text.trim();
-      if (text.length > 2 && text.length < 40 && !RegExp(r'[0-9]{2,}').hasMatch(text)) {
+      if (text.length > 2 &&
+          text.length < 40 &&
+          !RegExp(r'[0-9]{2,}').hasMatch(text)) {
         if (!text.toLowerCase().contains('total') &&
             !text.toLowerCase().contains('tax') &&
             !text.toLowerCase().contains('subtotal') &&
@@ -101,9 +103,15 @@ class OcrService {
           final parts = match.group(0)!.split(RegExp(r'[/\-]'));
           if (parts.length == 3) {
             if (parts[0].length == 4) {
-              return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+              return DateTime(
+                int.parse(parts[0]),
+                int.parse(parts[1]),
+                int.parse(parts[2]),
+              );
             } else {
-              final year = int.parse(parts[2].length == 2 ? '20${parts[2]}' : parts[2]);
+              final year = int.parse(
+                parts[2].length == 2 ? '20${parts[2]}' : parts[2],
+              );
               return DateTime(year, int.parse(parts[0]), int.parse(parts[1]));
             }
           }

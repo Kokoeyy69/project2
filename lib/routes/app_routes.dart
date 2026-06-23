@@ -10,15 +10,19 @@ import '../presentation/transfer_screen/transfer_screen.dart';
 import '../presentation/transfer_screen/transfer_keypad_screen.dart';
 import '../presentation/transfer_screen/transfer_success_screen.dart';
 import '../presentation/activity_screen/activity_screen.dart';
+import '../presentation/exchange_rates/exchange_rates_screen.dart';
 import '../presentation/profile_screen/profile_screen.dart';
 import '../presentation/onboarding_screen/onboarding_screen.dart';
 import '../presentation/ai_chat/ai_chat_screen.dart';
-import '../presentation/ai_assistant/ai_chat_screen.dart';
 import '../presentation/security/reset_pin_screen.dart';
 import '../presentation/ocr/ocr_scanner_screen.dart';
 import '../presentation/analytics/analytics_screen.dart';
+import '../presentation/locator/locator_screen.dart';
 
 class AppRoutes {
+  static const String appLockPasswordScreen = '/app-lock';
+  static const String transactionDetailScreen = '/transaction-detail';
+  static const String changePinScreen = '/change-pin';
   static const String initial = '/';
   static const String splashScreen = '/splash-screen'; // <-- Aku tambahin ini
   static const String homeScreen = '/home-screen';
@@ -29,12 +33,13 @@ class AppRoutes {
   static const String activityScreen = '/activity-screen';
   static const String profileScreen = '/profile-screen';
   static const String aiChatScreen = '/ai-chat';
-  static const String aiAssistantScreen = '/ai-assistant';
   static const String pinEntryScreen = '/pin-entry';
   static const String resetPinScreen = '/reset-pin';
   static const String ocrScannerScreen = '/ocr-scanner';
   static const String analyticsScreen = '/analytics';
+  static const String locatorScreen = '/locator';
   static const String onboardingScreen = '/onboarding-screen';
+  static const String exchangeRatesScreen = '/rates';
 
   static Map<String, WidgetBuilder> routes = {
     // Sekarang aplikasi buka Splash Screen duluan, bukan Onboarding
@@ -47,10 +52,11 @@ class AppRoutes {
     transferSuccessScreen: (context) => const TransferSuccessScreen(),
     activityScreen: (context) => const ActivityScreen(),
     profileScreen: (context) => const ProfileScreen(),
+    exchangeRatesScreen: (context) => const ExchangeRatesScreen(),
     aiChatScreen: (context) => const AiChatScreen(),
-    aiAssistantScreen: (context) => const AIChatScreen(),
     ocrScannerScreen: (context) => const OcrScannerScreen(),
     analyticsScreen: (context) => const AnalyticsScreen(),
+    locatorScreen: (context) => LocatorScreen(),
     resetPinScreen: (context) => const ResetPinScreen(),
     onboardingScreen: (context) => const OnboardingScreen(),
   };
@@ -75,16 +81,18 @@ class AppRoutes {
         return _buildPageRoute(const ProfileScreen(), settings);
       case aiChatScreen:
         return _buildElegantPageRoute(const AiChatScreen(), settings);
-      case aiAssistantScreen:
-        return _buildPageRoute(const AIChatScreen(), settings);
       case ocrScannerScreen:
         return _buildPageRoute(const OcrScannerScreen(), settings);
       case analyticsScreen:
         return _buildPageRoute(const AnalyticsScreen(), settings);
+      case locatorScreen:
+        return _buildPageRoute(LocatorScreen(), settings);
       case resetPinScreen:
         return _buildPageRoute(const ResetPinScreen(), settings);
       case onboardingScreen:
         return _buildPageRoute(const OnboardingScreen(), settings);
+      case exchangeRatesScreen:
+        return _buildPageRoute(const ExchangeRatesScreen(), settings);
       default:
         // Default-nya juga dikembalikan ke Splash Screen buat keamanan
         return _buildPageRoute(SplashScreen(), settings);

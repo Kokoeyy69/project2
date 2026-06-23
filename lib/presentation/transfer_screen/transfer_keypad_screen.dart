@@ -1,129 +1,46 @@
 // ignore_for_file: use_build_context_synchronously
 import 'dart:ui';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
 import '../../routes/app_routes.dart';
-import '../../services/api_service.dart';
 import '../../services/hive_cache_service.dart';
 import '../../core/services/security_service.dart';
 import '../security/create_pin_screen.dart';
 import '../security/verify_pin_screen.dart';
 import './widgets/numeric_keypad_widget.dart';
 import './widgets/transfer_contact_list_widget.dart';
+import 'transfer_view_model.dart';
 
-class TransferKeypadScreen extends StatefulWidget {
+class TransferKeypadScreen extends StatelessWidget {
   const TransferKeypadScreen({super.key});
 
   @override
-  State<TransferKeypadScreen> createState() => _TransferKeypadScreenState();
+  Widget build(BuildContext context) {
+    final String? qrData = ModalRoute.of(context)?.settings.arguments as String?;
+
+    return ChangeNotifierProvider(
+      create: (_) {
+        final vm = TransferViewModel();
+        if (qrData != null && qrData.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            vm.processQrPayload(qrData);
+          });
+        }
+        return vm;
+      },
+      child: const _TransferKeypadScreenContent(),
+    );
+  }
 }
 
-class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
-  int _currentNavIndex = 1;
-  String _amount = '';
-  String? _selectedContactId;
-  String? _selectedContactName;
-  String _selectedCurrency = 'IDR';
-  String _targetCurrency = 'USD';
-  bool _isTransferLoading = false; // Debounce: prevents double-spend
+class _TransferKeypadScreenContent extends StatelessWidget {
+  const _TransferKeypadScreenContent();
 
-  final List<String> _currencies = ['IDR', 'USD', 'CNY'];
-
-  final Map<String, double> _rates = {
-    'IDR_USD': 0.000064,
-    'IDR_CNY': 0.000463,
-    'USD_IDR': 15625.0,
-    'USD_CNY': 7.24,
-    'CNY_IDR': 2159.0,
-    'CNY_USD': 0.138,
-  };
-
-  void _onNavTap(int index) {
-    setState(() => _currentNavIndex = index);
-    if (index == 0) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.homeScreen,
-        (_) => false,
-      );
-    } else if (index == 2) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.activityScreen,
-        (_) => false,
-      );
-    } else if (index == 3) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.profileScreen,
-        (_) => false,
-      );
-    }
-  }
-
-  void _onKeyTap(String key) {
-    setState(() {
-      if (key == '.' && _amount.contains('.')) return;
-      if (key == '000' && _amount.isEmpty) return;
-      if (_amount.length >= 12) return;
-      _amount += key;
-    });
-  }
-
-  void _onBackspace() {
-    if (_amount.isNotEmpty) {
-      setState(() => _amount = _amount.substring(0, _amount.length - 1));
-    }
-  }
-
-  void _onClear() => setState(() => _amount = '');
-
-  String _getConvertedAmount() {
-    if (_amount.isEmpty) return '0.00';
-    final val = double.tryParse(_amount) ?? 0.0;
-    if (_selectedCurrency == _targetCurrency) return _amount;
-    final key = '${_selectedCurrency}_$_targetCurrency';
-    final rate = _rates[key] ?? 1.0;
-    final converted = val * rate;
-    if (converted >= 1000) {
-      return converted
-          .toStringAsFixed(0)
-          .replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]},',
-          );
-    }
-    return converted.toStringAsFixed(2);
-  }
-
-  void _onConvertAndSend() {
-    if (_isTransferLoading) return; // Debounce guard
-    final val = double.tryParse(_amount) ?? 0;
-    if (val <= 0 || _selectedContactId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            val <= 0
-                ? 'Please enter a valid amount'
-                : 'Please select a recipient',
-            style: GoogleFonts.inter(color: AppTheme.textPrimary),
-          ),
-          backgroundColor: AppTheme.surfaceVariant,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-    _showConfirmDialog();
-  }
-
- void _showConfirmDialog() {
+  void _showConfirmDialog(BuildContext context, TransferViewModel viewModel) {
     showDialog(
       context: context,
       builder: (ctx) => BackdropFilter(
@@ -165,12 +82,11 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                           ),
                         ),
                         Text(
-                          '$_amount $_selectedCurrency',
+                          '${viewModel.numericAmount} ${viewModel.selectedCurrency}',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
-                          
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -191,12 +107,11 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                           ),
                         ),
                         Text(
-                          '${_getConvertedAmount()} $_targetCurrency',
+                          '${viewModel.formattedConvertedAmount} ${viewModel.targetCurrency}',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.success,
-                            
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -226,7 +141,7 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                 // Step 2: Small delay to avoid UI jank after dialog dismissal
                 await Future.delayed(const Duration(milliseconds: 150));
 
-                if (!mounted) return;
+                if (!context.mounted) return;
 
                 bool pinOk = false;
                 if (!hasPin) {
@@ -235,7 +150,7 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                     MaterialPageRoute(builder: (_) => const CreatePinScreen()),
                   );
                   pinOk = result == true;
-                  if (!pinOk && mounted) {
+                  if (!pinOk && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -257,7 +172,7 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                     ),
                   );
                   pinOk = result == true;
-                  if (!pinOk && mounted) {
+                  if (!pinOk && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -272,90 +187,54 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                 }
 
                 // Step 3: Abort if PIN not verified
-                if (!pinOk || !mounted) return;
+                if (!pinOk || !context.mounted) return;
 
-                // Step 4: Call secure ApiService — NO direct Firestore writes here
-                // Lock button to prevent double-spend
-                if (mounted) setState(() => _isTransferLoading = true);
+                // Step 4: Call secure ApiService
+                final success = await viewModel.processTransfer();
 
-                try {
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user == null) {
-                    if (mounted) setState(() => _isTransferLoading = false);
-                    return;
-                  }
+                if (!context.mounted) return;
 
-                  final transferAmount = double.tryParse(_amount) ?? 0.0;
-                  final transferReq = TransferRequest(
-                    senderUid: user.uid,
-                    recipientUid: _selectedContactId ?? '',
-                    amount: transferAmount,
-                    recipientName: _selectedContactName ?? 'Recipient',
-                    senderName: user.displayName ?? 'User',
-                  );
-
-                  final res = await ApiService.instance.processTransfer(transferReq);
-
-                  if (!mounted) return;
-
-                  if (!res.success) {
-                    setState(() => _isTransferLoading = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          res.error ?? res.message ?? 'Transfer failed. Please try again.',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                        backgroundColor: AppTheme.error,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-
-                  // Step 5: Navigate to success screen.
-                  // HomeViewModel uses a live Firestore stream — balance
-                  // auto-updates on the home screen without a manual refresh.
-                  final rateKey = '${_selectedCurrency}_$_targetCurrency';
-                  final rate = _rates[rateKey] ?? 1.0;
-                  final rateStr = _selectedCurrency == _targetCurrency
-                      ? '1.00'
-                      : rate < 1
-                          ? rate.toStringAsFixed(6)
-                          : rate.toStringAsFixed(4);
-
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    AppRoutes.transferSuccessScreen,
-                    (_) => false,
-                    arguments: {
-                      'recipientName': _selectedContactName ?? 'Recipient',
-                      'amountSent': _amount,
-                      'sourceCurrency': _selectedCurrency,
-                      'exchangeRate': rateStr,
-                      'amountReceived': _getConvertedAmount(),
-                      'targetCurrency': _targetCurrency,
-                    },
-                  );
-                } catch (e) {
-                  debugPrint('[TransferKeypad] Transfer error: $e');
-                  if (!mounted) return;
-                  setState(() => _isTransferLoading = false);
-                  String errorMsg = 'Transfer failed. Please try again.';
-                  if (e.toString().contains('Insufficient_Balance')) {
-                    errorMsg = 'Insufficient balance to cover amount + fee.';
-                  }
+                if (!success) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        errorMsg,
-                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                        'Transfer failed. Please try again.',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       backgroundColor: AppTheme.error,
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
+                  return;
                 }
+
+                // Step 5: Navigate to success screen
+                final rateKey =
+                    '${viewModel.selectedCurrency}_${viewModel.targetCurrency}';
+                final rate = viewModel.rates[rateKey] ?? 1.0;
+                final rateStr =
+                    viewModel.selectedCurrency == viewModel.targetCurrency
+                    ? '1.00'
+                    : rate < 1
+                    ? rate.toStringAsFixed(6)
+                    : rate.toStringAsFixed(4);
+
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  AppRoutes.transferSuccessScreen,
+                  (_) => false,
+                  arguments: {
+                    'recipientName': viewModel.selectedContactName,
+                    'amountSent': viewModel.numericAmount.toString(),
+                    'sourceCurrency': viewModel.selectedCurrency,
+                    'exchangeRate': rateStr,
+                    'amountReceived': viewModel.formattedConvertedAmount,
+                    'targetCurrency': viewModel.targetCurrency,
+                  },
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
@@ -373,8 +252,51 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
+    final viewModel = Provider.of<TransferViewModel>(context);
+
+    if (viewModel.qrErrorMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final message = viewModel.qrErrorMessage;
+        if (message == null || !context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message,
+              style: GoogleFonts.inter(color: Colors.white),
+            ),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        viewModel.clearQrErrorMessage();
+      });
+    }
+
+    void onNavTap(int index) {
+      if (index == 0) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.homeScreen,
+          (_) => false,
+        );
+      } else if (index == 2) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.activityScreen,
+          (_) => false,
+        );
+      } else if (index == 3) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.profileScreen,
+          (_) => false,
+        );
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       extendBody: true,
@@ -382,39 +304,37 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
         bottom: false,
         child: Column(
           children: [
-            _buildAppBar(),
+            _buildAppBar(context),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                 child: Column(
                   children: [
-                    _buildCurrencySelector(),
+                    _buildCurrencySelector(context, viewModel),
                     const SizedBox(height: 12),
-                    
+
                     // --- KOTAK NOMINAL BESAR YANG BARU DITAMBAHKAN ---
-                    _buildLargeAmountDisplay(),
+                    _buildLargeAmountDisplay(viewModel),
                     const SizedBox(height: 12),
-                    
-                    _buildConversionPreview(),
+
+                    _buildConversionPreview(viewModel),
                     const SizedBox(height: 12),
                     TransferContactListWidget(
-                      selectedContactId: _selectedContactId,
-                      onContactSelected: (id, name) =>
-                          setState(() {
-                            _selectedContactId = id;
-                            _selectedContactName = name;
-                          }),
+                      selectedContactId: viewModel.selectedContactId,
+                      onContactSelected: (id, name) {
+                        viewModel.setSelectedContact(id, name);
+                      },
                     ),
                     const SizedBox(height: 12),
                     NumericKeypadWidget(
-                      displayAmount: _amount,
-                      onKeyTap: _onKeyTap,
-                      onBackspace: _onBackspace,
-                      onClear: _onClear,
+                      displayAmount: viewModel.displayAmount,
+                      onKeyTap: (key) => viewModel.appendDigit(key),
+                      onBackspace: () => viewModel.removeLastDigit(),
+                      onClear: () => viewModel.clearAmount(),
                     ),
                     const SizedBox(height: 16),
-                    _buildConvertSendButton(),
+                    _buildConvertSendButton(context, viewModel),
                   ],
                 ),
               ),
@@ -422,93 +342,20 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: AppNavigation(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
-      ),
+      bottomNavigationBar: AppNavigation(currentIndex: 1, onTap: onNavTap),
+      floatingActionButton: viewModel.isTransferLoading
+          ? Container(
+              color: Colors.black.withAlpha(50),
+              child: const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
-  // --- FUNGSI BARU UNTUK MERENDER KOTAK NOMINAL ---
-  Widget _buildLargeAmountDisplay() {
-    // Format angkanya biar ada titik ribuannya
-    String displayVal = _amount.isEmpty ? '0' : _amount;
-    if (_amount.isNotEmpty) {
-      final val = double.tryParse(_amount) ?? 0.0;
-      displayVal = val.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (m) => '${m[1]}.',
-      );
-    }
-
-    String currencySymbol = 'Rp ';
-    if (_selectedCurrency == 'USD') currencySymbol = '\$ ';
-    if (_selectedCurrency == 'CNY') currencySymbol = '¥ ';
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withAlpha(153),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.glassBorder, width: 0.5),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Amount',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  color: AppTheme.glassBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.primary.withAlpha(153), width: 1.2),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      currencySymbol,
-                      style: GoogleFonts.inter(
-                        fontSize: 24, 
-                        fontWeight: FontWeight.w600, 
-                        color: AppTheme.textSecondary
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        displayVal,
-                        style: GoogleFonts.inter(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ... (Sisa fungsi AppBar, Dropdown, dll tetap sama)
-
-  Widget _buildAppBar() {
+  Widget _buildAppBar(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Row(
@@ -583,7 +430,10 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
     );
   }
 
-  Widget _buildCurrencySelector() {
+  Widget _buildCurrencySelector(
+    BuildContext context,
+    TransferViewModel viewModel,
+  ) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -600,18 +450,14 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
               Expanded(
                 child: _buildCurrencyDropdown(
                   'From',
-                  _selectedCurrency,
-                  (val) => setState(() => _selectedCurrency = val!),
+                  viewModel.selectedCurrency,
+                  (val) => viewModel.setSelectedCurrency(val!),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: GestureDetector(
-                  onTap: () => setState(() {
-                    final tmp = _selectedCurrency;
-                    _selectedCurrency = _targetCurrency;
-                    _targetCurrency = tmp;
-                  }),
+                  onTap: () => viewModel.toggleCurrencies(),
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -629,8 +475,8 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
               Expanded(
                 child: _buildCurrencyDropdown(
                   'To',
-                  _targetCurrency,
-                  (val) => setState(() => _targetCurrency = val!),
+                  viewModel.targetCurrency,
+                  (val) => viewModel.setTargetCurrency(val!),
                 ),
               ),
             ],
@@ -680,9 +526,11 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
                 color: AppTheme.textMuted,
                 size: 16,
               ),
-              items: _currencies
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
+              items: [
+                'IDR',
+                'USD',
+                'CNY',
+              ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
               onChanged: onChanged,
             ),
           ),
@@ -691,8 +539,85 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
     );
   }
 
-  Widget _buildConversionPreview() {
-    if (_amount.isEmpty) return const SizedBox.shrink();
+  Widget _buildLargeAmountDisplay(TransferViewModel viewModel) {
+    String displayVal = viewModel.displayAmount;
+    if (displayVal.startsWith('Rp')) {
+      displayVal = displayVal.substring(2);
+    }
+
+    String currencySymbol = 'Rp ';
+    if (viewModel.selectedCurrency == 'USD') currencySymbol = '\$ ';
+    if (viewModel.selectedCurrency == 'CNY') currencySymbol = '¥ ';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surface.withAlpha(153),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.glassBorder, width: 0.5),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Amount',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.glassBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.primary.withAlpha(153),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      currencySymbol,
+                      style: GoogleFonts.inter(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        displayVal,
+                        style: GoogleFonts.inter(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversionPreview(TransferViewModel viewModel) {
+    if (viewModel.numericAmount == 0) return const SizedBox.shrink();
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
@@ -717,7 +642,7 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                '$_amount $_selectedCurrency = ${_getConvertedAmount()} $_targetCurrency',
+                '${viewModel.numericAmount} ${viewModel.selectedCurrency} = ${viewModel.formattedConvertedAmount} ${viewModel.targetCurrency}',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -731,19 +656,21 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
     );
   }
 
-  Widget _buildConvertSendButton() {
-    final val = double.tryParse(_amount) ?? 0;
-    
+  Widget _buildConvertSendButton(
+    BuildContext context,
+    TransferViewModel viewModel,
+  ) {
     final currentBalance = HiveCacheService.getCachedBalance() ?? 0.0;
-    double amountInIdr = val;
-    if (_selectedCurrency != 'IDR') {
-      final rateKey = '${_selectedCurrency}_IDR';
-      amountInIdr = val * (_rates[rateKey] ?? 1.0);
+    double amountInIdr = viewModel.numericAmount;
+    if (viewModel.selectedCurrency != 'IDR') {
+      final rateKey = '${viewModel.selectedCurrency}_IDR';
+      amountInIdr = viewModel.numericAmount * (viewModel.rates[rateKey] ?? 1.0);
     }
-    
-    final isInsufficient = val > 0 && amountInIdr > currentBalance;
-    final isReady = _amount.isNotEmpty && _selectedContactId != null && !_isTransferLoading && !isInsufficient;
-    
+
+    final isInsufficient =
+        viewModel.numericAmount > 0 && amountInIdr > currentBalance;
+    final isReady = viewModel.isTransferReady && !isInsufficient;
+
     return Column(
       children: [
         if (isInsufficient)
@@ -759,66 +686,70 @@ class _TransferKeypadScreenState extends State<TransferKeypadScreen> {
             ),
           ),
         GestureDetector(
-          onTap: isReady ? _onConvertAndSend : null,
+          onTap: isReady ? () => _showConfirmDialog(context, viewModel) : null,
           child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          gradient: isReady
-              ? const LinearGradient(
-                  colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                )
-              : null,
-          color: isReady ? null : AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isReady
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primary.withAlpha(80),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_isTransferLoading)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            else
-              Icon(
-                Icons.send_rounded,
-                color: isReady ? Colors.white : AppTheme.textMuted,
-                size: 18,
-              ),
-            const SizedBox(width: 10),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Text(
-                key: ValueKey(_isTransferLoading),
-                _isTransferLoading ? 'Processing...' : 'Convert & Send',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: isReady || _isTransferLoading ? Colors.white : AppTheme.textMuted,
-                  letterSpacing: 0.2,
-                ),
-              ),
+            duration: const Duration(milliseconds: 200),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              gradient: isReady
+                  ? const LinearGradient(
+                      colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    )
+                  : null,
+              color: isReady ? null : AppTheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: isReady
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primary.withAlpha(80),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
             ),
-          ],
-        ),
-        ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (viewModel.isTransferLoading)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.send_rounded,
+                    color: isReady ? Colors.white : AppTheme.textMuted,
+                    size: 18,
+                  ),
+                const SizedBox(width: 10),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Text(
+                    key: ValueKey(viewModel.isTransferLoading),
+                    viewModel.isTransferLoading
+                        ? 'Processing...'
+                        : 'Convert & Send',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isReady || viewModel.isTransferLoading
+                          ? Colors.white
+                          : AppTheme.textMuted,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

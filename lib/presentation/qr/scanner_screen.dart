@@ -1,96 +1,65 @@
 import 'dart:ui';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
-import '../../services/hive_cache_service.dart';
+import './scanner_view_model.dart';
 
-class ScannerScreen extends StatefulWidget {
+class ScannerScreen extends StatelessWidget {
   const ScannerScreen({super.key});
 
   @override
-  State<ScannerScreen> createState() => _ScannerScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ScannerViewModel(),
+      child: const _ScannerScreenContent(),
+    );
+  }
 }
 
-class _ScannerScreenState extends State<ScannerScreen> {
-  MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-  );
+class _ScannerScreenContent extends StatelessWidget {
+  const _ScannerScreenContent();
 
-  bool _isProcessing = false;
-  bool _isFetchingRecipient = false;
-  Map<String, dynamic>? _recipientData;
-  String? _recipientUid;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _showProcessingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 40 / 255),
+                blurRadius: 20,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SpinKitFadingCircle(color: AppTheme.primary, size: 40),
+              const SizedBox(height: 16),
+              Text(
+                'Memproses transfer...',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  Future<void> _handleBarcode(BarcodeCapture capture) async {
-    if (_isProcessing || capture.barcodes.isEmpty) return;
-
-    final barcode = capture.barcodes.first;
-    if (barcode.rawValue == null) return;
-
-    final scannedUid = barcode.rawValue!;
-
-    // Validate it looks like a Firebase UID (28 chars alphanumeric)
-    if (scannedUid.length < 10) return;
-
-    setState(() {
-      _isProcessing = true;
-      _isFetchingRecipient = true;
-    });
-
-    // Stop scanner while processing
-    await _controller.stop();
-
-    try {
-      // Fetch recipient data from Firestore
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(scannedUid)
-          .get();
-
-      if (!doc.exists) {
-        _showError('User tidak ditemukan');
-        return;
-      }
-
-      final data = doc.data()!;
-      final currentUid = FirebaseAuth.instance.currentUser?.uid;
-
-      if (scannedUid == currentUid) {
-        _showError('Tidak bisa transfer ke diri sendiri');
-        return;
-      }
-
-      setState(() {
-        _recipientData = data;
-        _recipientUid = scannedUid;
-        _isFetchingRecipient = false;
-      });
-
-      // Show amount input dialog
-      _showAmountInputDialog();
-    } catch (e) {
-      _showError('Gagal mengambil data penerima: $e');
-      setState(() {
-        _isProcessing = false;
-        _isFetchingRecipient = false;
-      });
-      await _controller.start();
-    }
-  }
-
-  void _showAmountInputDialog() {
+  void _showAmountInputDialog(BuildContext context, ScannerViewModel vm) {
     final amountController = TextEditingController();
 
     showModalBottomSheet(
@@ -117,28 +86,38 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Transfer ke ${_recipientData?['name'] ?? 'User'}',
-                  style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary)),
+              Text(
+                'Transfer ke ${vm.recipientData?['name'] ?? 'User'}',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Masukkan nominal transfer',
-                  style: GoogleFonts.inter(
-                      fontSize: 14, color: AppTheme.textSecondary)),
+              Text(
+                'Masukkan nominal transfer',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
               const SizedBox(height: 24),
               TextField(
                 controller: amountController,
                 keyboardType: TextInputType.number,
                 autofocus: true,
                 style: GoogleFonts.inter(
-                    fontSize: 24, fontWeight: FontWeight.w700),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                ),
                 decoration: InputDecoration(
                   prefixText: 'Rp ',
                   prefixStyle: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
                   hintText: '0',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -146,7 +125,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+                    borderSide: const BorderSide(
+                      color: AppTheme.primary,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -157,7 +139,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     child: OutlinedButton(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        _resetScanner();
+                        vm.resetScanner();
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -165,24 +147,61 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: Text('Batal',
-                          style: GoogleFonts.inter(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      child: Text(
+                        'Batal',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        final amount = double.tryParse(amountController.text.replaceAll('.', '').replaceAll(',', ''));
+                      onPressed: () async {
+                        final amountText = amountController.text
+                            .replaceAll('.', '')
+                            .replaceAll(',', '');
+                        final amount = double.tryParse(amountText);
+
                         if (amount == null || amount <= 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Nominal tidak valid'), backgroundColor: Colors.red),
+                            const SnackBar(
+                              content: Text('Nominal tidak valid'),
+                              backgroundColor: Colors.red,
+                            ),
                           );
                           return;
                         }
                         Navigator.pop(ctx);
-                        _processTransfer(amount);
+
+                        // Show processing dialog
+                        _showProcessingDialog(context);
+
+                        final success = await vm.processTransfer(amount);
+
+                        if (context.mounted) {
+                          Navigator.pop(context); // Close processing
+                        }
+
+                        if (success && context.mounted) {
+                          final formatter = NumberFormat.currency(
+                            locale: 'id_ID',
+                            symbol: 'Rp ',
+                            decimalDigits: 0,
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '✅ Transfer ${formatter.format(amount)} ke ${vm.recipientData?['name']} berhasil!',
+                              ),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                          Navigator.pop(context);
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primary,
@@ -191,11 +210,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: Text('Kirim',
-                          style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
+                      child: Text(
+                        'Kirim',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -205,265 +227,228 @@ class _ScannerScreenState extends State<ScannerScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Future<void> _processTransfer(double amount) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null || _recipientUid == null) {
-      _showError('User tidak terautentikasi');
-      return;
-    }
-
-    setState(() => _isProcessing = true);
-
-    // Show processing dialog with SpinKit
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(40),
-                blurRadius: 20,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SpinKitFadingCircle(color: AppTheme.primary, size: 40),
-              const SizedBox(height: 16),
-              Text('Memproses transfer...',
-                  style: GoogleFonts.inter(
-                      fontSize: 14, color: AppTheme.textSecondary)),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    try {
-      // ATOMIC WRITE BATCH - The "Real" Transfer
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
-
-      // Action 1: Deduct from sender
-      final senderRef = FirebaseFirestore.instance.collection('users').doc(currentUid);
-      batch.update(senderRef, {'balance': FieldValue.increment(-amount)});
-
-      // Action 2: Add to recipient
-      final recipientRef = FirebaseFirestore.instance.collection('users').doc(_recipientUid!);
-      batch.update(recipientRef, {'balance': FieldValue.increment(amount)});
-
-      // Action 3: Create transaction log
-      final trxRef = FirebaseFirestore.instance.collection('transactions').doc();
-      batch.set(trxRef, {
-        'senderUid': currentUid,
-        'recipientUid': _recipientUid,
-        'recipientName': _recipientData?['name'] ?? 'User',
-        'senderName': FirebaseAuth.instance.currentUser?.displayName ?? 'User',
-        'amount': amount,
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': 'p2p_transfer',
-        'status': 'success',
-      });
-
-      // Execute atomic batch
-      await batch.commit();
-
-      // Update Hive cache for instant UI refresh
-      final currentBalance = (HiveCacheService.getCachedBalance()) ?? 0.0;
-      await HiveCacheService.setCachedBalance(currentBalance - amount);
-
-      if (mounted) Navigator.pop(context); // Close processing dialog
-
-      // Show success
-      final formatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Transfer ${formatter.format(amount)} ke ${_recipientData?['name']} berhasil!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      if (mounted) Navigator.pop(context); // Return to previous screen
-    } catch (e) {
-      if (mounted) Navigator.pop(context); // Close processing dialog
-      _showError('Transfer gagal: $e');
-    } finally {
-      setState(() => _isProcessing = false);
-    }
-  }
-
-  Future<void> _resetScanner() async {
-    setState(() {
-      _isProcessing = false;
-      _isFetchingRecipient = false;
-      _recipientData = null;
-      _recipientUid = null;
-    });
-    await _controller.start();
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('❌ $message'), backgroundColor: Colors.red),
-    );
-    _resetScanner();
+    ).whenComplete(amountController.dispose);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text('Scan QR',
-            style: GoogleFonts.inter(
-                fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () async {
-            await _controller.dispose();
-            if (mounted) Navigator.pop(context);
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _controller.torchEnabled ? Icons.flash_on : Icons.flash_off,
-              color: Colors.white,
-            ),
-            onPressed: () async {
-              await _controller.toggleTorch();
-              setState(() {});
-            },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _handleBarcode,
-          ),
-          // Scan overlay
-          Center(
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppTheme.primary, width: 2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Stack(
-                children: [
-                  // Corner decorations
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: AppTheme.primary, width: 3),
-                          left: BorderSide(color: AppTheme.primary, width: 3),
-                        ),
-                        borderRadius: BorderRadius.only(topLeft: Radius.circular(20)),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: AppTheme.primary, width: 3),
-                          right: BorderSide(color: AppTheme.primary, width: 3),
-                        ),
-                        borderRadius: BorderRadius.only(topRight: Radius.circular(20)),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppTheme.primary, width: 3),
-                          left: BorderSide(color: AppTheme.primary, width: 3),
-                        ),
-                        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(20)),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppTheme.primary, width: 3),
-                          right: BorderSide(color: AppTheme.primary, width: 3),
-                        ),
-                        borderRadius: BorderRadius.only(bottomRight: Radius.circular(20)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Instructions
-          Positioned(
-            bottom: 100,
-            left: 0,
-            right: 0,
-            child: Text(
-              'Arahkan kamera ke QR Code',
-              textAlign: TextAlign.center,
+    return Consumer<ScannerViewModel>(
+      builder: (context, viewModel, child) {
+        // Watch for recipient found
+        if (viewModel.recipientUid != null &&
+            !viewModel.isFetchingRecipient &&
+            !viewModel.isProcessing) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showAmountInputDialog(context, viewModel);
+          });
+        }
+
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            title: Text(
+              'Scan QR',
               style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                  shadows: [const Shadow(color: Colors.black, blurRadius: 10)]),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
+            backgroundColor: Colors.black,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  viewModel.isFlashOn ? Icons.flash_on : Icons.flash_off,
+                  color: Colors.white,
+                ),
+                onPressed: viewModel.toggleFlash,
+              ),
+            ],
           ),
-          // Loading overlay
-          if (_isFetchingRecipient)
-            Container(
-              color: Colors.black87,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SpinKitFadingCircle(color: AppTheme.primary, size: 50),
-                    const SizedBox(height: 16),
-                    Text('Mencari penerima...',
-                        style: GoogleFonts.inter(
-                            fontSize: 16, color: Colors.white, fontWeight: FontWeight.w500)),
-                  ],
+          body: Stack(
+            children: [
+              MobileScanner(
+                controller: viewModel.controller,
+                onDetect: (capture) => viewModel.handleBarcode(capture),
+              ),
+              // Scan overlay
+              Center(
+                child: Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppTheme.primary, width: 2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Stack(
+                    children: [
+                      // Corner decorations
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                              left: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                              right: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.only(
+                              topRight: Radius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                              left: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                              right: BorderSide(
+                                color: AppTheme.primary,
+                                width: 3,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.only(
+                              bottomRight: Radius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
-      ),
+              // Instructions
+              Positioned(
+                bottom: 100,
+                left: 0,
+                right: 0,
+                child: Text(
+                  'Arahkan kamera ke QR Code',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                    shadows: [
+                      const Shadow(color: Colors.black, blurRadius: 10),
+                    ],
+                  ),
+                ),
+              ),
+              // Loading overlay
+              if (viewModel.isFetchingRecipient)
+                Container(
+                  color: Colors.black87,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SpinKitFadingCircle(
+                          color: AppTheme.primary,
+                          size: 50,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Mencari penerima...',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (viewModel.errorMessage != null)
+                Positioned(
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      viewModel.errorMessage!,
+                      style: const TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
